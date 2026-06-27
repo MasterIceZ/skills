@@ -111,7 +111,9 @@ int main(int argc, char* argv[]) {
 }
 ```
 
-In the test script, call it with different `n` values. To get multiple distinct tests at the same size, append a different trailing integer — `registerGen(argc, argv, 1)` seeds the RNG from **all** argv, so `gen_random 100000 1` and `gen_random 100000 2` produce completely different tests even though the generator only reads `argv[1]`. The generator code needs no changes to support this.
+In the test script, call it with different `n` values. To get multiple distinct tests at the same size, append a different trailing integer — `registerGen(argc, argv, 1)` seeds the RNG from **all** argv, so `gen_random 100000 1` and `gen_random 100000 2` produce completely different tests.
+
+**Seed-vs-m collision:** if gen_random reads `argv[2]` as `m`, a trailing seed like `gen_random 10 2` will be parsed as n=10, m=2 — but the spanning tree alone needs n−1=9 edges, so the header would say m=2 while 9 lines follow, failing the validator. Fix this in the generator by clamping: `m = max(n - 1, atoi(argv[2]))`. This way the seed still changes the RNG while m is always legal, and explicit large-m calls (e.g. `gen_random 100000 200000 3`) work unchanged because 200000 ≥ n−1.
 
 ---
 
@@ -473,6 +475,7 @@ For **graph** problems: always include a path graph and a star. If M allows it, 
 - [ ] Hand-crafted tests `01`, `02`, `03` pass the validator
 - [ ] `script.txt` references `gen_edge`, `gen_random`, `gen_adversarial`, `gen_special` (not bare `gen`)
 - [ ] No two lines in `script.txt` share the same generator name + arguments — every repeated call has a distinct trailing seed integer (e.g., `gen_random 100000 1`, `gen_random 100000 2`)
+- [ ] `gen_random` clamps m to `max(n-1, atoi(argv[2]))` so seed suffixes never produce an invalid edge count in the header
 - [ ] `gen_special` subtypes each encode a distinct structural shape, not just a size variation
 - [ ] `gen_stress` caps N at a value brute handles in under 50ms
 - [ ] `brute.cpp` gives correct output but is slow enough to need stress testing
