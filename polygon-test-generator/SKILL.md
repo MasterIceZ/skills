@@ -35,7 +35,7 @@ Read the statement carefully (Markdown or LaTeX). Extract:
 - **Input format**: variable names, structure, exact reading order
 - **Constraints**: every bound (N ≤ ?, 1 ≤ aᵢ ≤ ?, etc.)
 - **Multiple test cases?** If the first line is T, note it — handle T-wrapping in all generators
-- **Output spec**: unique answer, any valid answer, yes/no, floating point — if multiple valid outputs exist, note that a custom checker would be needed (don't generate it; it's too problem-specific)
+- **Output spec**: unique answer, any valid answer, yes/no, floating point — decide if the answer is unique. A **custom checker** is needed whenever multiple outputs are valid: printing an actual path/assignment/permutation (not just its cost), any-valid-answer constructive problems, floating point with tolerance. If a checker is needed, note it but don't generate it — it's too problem-specific. For the rest of this skill, assume the checker question is already settled.
 - **Problem type**: see heuristics table at the end
 
 ---
@@ -111,7 +111,7 @@ int main(int argc, char* argv[]) {
 }
 ```
 
-In the test script, call it with different `n` values and Polygon auto-varies the seed, covering the space well.
+In the test script, call it with different `n` values. To get multiple distinct tests at the same size, append a different trailing integer — `registerGen(argc, argv, 1)` seeds the RNG from **all** argv, so `gen_random 100000 1` and `gen_random 100000 2` produce completely different tests even though the generator only reads `argv[1]`. The generator code needs no changes to support this.
 
 ---
 
@@ -198,6 +198,37 @@ int main(int argc, char* argv[]) {
 ```
 
 See the heuristics table for what adversarial cases to generate per problem type. Think about what the **wrong/TLE solutions** would fail on and target those.
+
+### Edge ordering in graph generators
+
+For graph and tree problems, **the order edges are printed can silently neuter an adversarial test.** Bellman-Ford, for example, degrades from O(NM) to O(M) when edges happen to be in topological order — one pass relaxes every node at once, so it finishes in milliseconds on a case intended to TLE it.
+
+Rule: whenever a graph generator prints edges in a structured sequence (chain 1→2→3→…→N, BFS/DFS order, spanning tree order), either shuffle them or print them in reverse:
+
+```cpp
+// Option A — shuffle with rnd so the order is reproducible but non-topological
+shuffle(edges.begin(), edges.end());
+for (auto [u, v] : edges) cout << u << " " << v << " " << w << "\n";
+
+// Option B — reverse order for a bamboo (forces N-1 Bellman-Ford rounds)
+for (int i = n - 1; i >= 1; i--)
+    cout << i << " " << (i + 1) << " " << w << "\n";
+```
+
+After writing any adversarial generator, verify the TLE solution actually TLEs:
+
+```bash
+timeout 3 ./tle_solution < adversarial_input && echo "FAIL: did not TLE" || echo "OK: TLE confirmed"
+```
+
+If it finishes in time, the generator is producing an accidentally easy ordering.
+
+### Connectivity and reachability
+
+`gen_random` always builds a spanning tree first, so node N is reachable. `gen_adversarial` and `gen_special` have no such guarantee — you must enforce reachability explicitly, or you'll produce accidental -1 tests.
+
+- **If the problem can output -1** (unreachable / impossible): include at least one disconnected adversarial case intentionally, and verify your other cases are connected by checking the output of `./sol` is not -1 unexpectedly.
+- **If the problem never outputs -1** (always a path exists): every generator must guarantee reachability. For chain/bamboo generators this is automatic; for generators that add edges randomly, start from a spanning tree as gen_random does before adding extra edges.
 
 ---
 
@@ -312,38 +343,49 @@ Write 3+ static test files for critical deterministic cases (name without extens
 
 ## Step 10 — Test Script (script.txt)
 
-```
-# Manual tests 01, 02, 03 are uploaded separately
+### Seeding rule — read this first
 
-# Edge cases
+`registerGen(argc, argv, 1)` seeds the RNG from **all** command-line arguments concatenated. Two script lines with identical arguments run the generator with the same seed and produce **identical tests**. To get distinct outputs, append a different trailing token (an integer or short string) to each repeated call:
+
+```
+gen_random 100000 1 > $   # seed differs from line below
+gen_random 100000 2 > $   # different output, same n
+gen_random 100000 3 > $   # different output again
+```
+
+The generator doesn't need to read `argv[2]` — testlib uses it purely for seeding. This rule applies to every generator in the script. **Never repeat the same `generator args` on two lines without a distinct trailing seed.**
+
+Generators that produce fully deterministic output (never call `rnd`) are immune — adding extra args changes nothing since `rnd` is never used — so call them only once per subtype.
+
+### Example script
+
+```
 gen_edge 0 > $
 gen_edge 1 > $
 gen_edge 2 > $
 gen_edge 3 > $
 gen_edge 4 > $
 gen_edge 5 > $
-
-# Special structural cases
 gen_special 0 > $
 gen_special 1 > $
 gen_special 2 > $
 gen_special 3 > $
-
-# Random — small to large
-gen_random 10 > $
-gen_random 100 > $
-gen_random 1000 > $
-gen_random MAXN > $
-gen_random MAXN > $
-gen_random MAXN > $
-
-# Adversarial
+gen_random 10 1 > $
+gen_random 100 1 > $
+gen_random 1000 1 > $
+gen_random MAXN 1 > $
+gen_random MAXN 2 > $
+gen_random MAXN 3 > $
+gen_random MAXN 4 > $
+gen_random MAXN 5 > $
 gen_adversarial 0 > $
-gen_adversarial 1 > $
-gen_adversarial 2 > $
+gen_adversarial 1 1 > $
+gen_adversarial 1 2 > $
+gen_adversarial 2 1 > $
+gen_adversarial 2 2 > $
 ```
 
-Polygon auto-seeds each line differently, so repeated `gen_random MAXN > $` lines produce distinct tests. Adjust the number of `gen_special` and `gen_adversarial` calls to match the subtypes you actually implemented.
+Adjust the number of `gen_special` and `gen_adversarial` calls to match the subtypes you actually implemented.
 
 ---
 
@@ -430,10 +472,13 @@ For **graph** problems: always include a path graph and a star. If M allows it, 
 - [ ] `validator.cpp` reads input in exact format — no extra/missing spaces or newlines
 - [ ] Hand-crafted tests `01`, `02`, `03` pass the validator
 - [ ] `script.txt` references `gen_edge`, `gen_random`, `gen_adversarial`, `gen_special` (not bare `gen`)
+- [ ] No two lines in `script.txt` share the same generator name + arguments — every repeated call has a distinct trailing seed integer (e.g., `gen_random 100000 1`, `gen_random 100000 2`)
 - [ ] `gen_special` subtypes each encode a distinct structural shape, not just a size variation
 - [ ] `gen_stress` caps N at a value brute handles in under 50ms
 - [ ] `brute.cpp` gives correct output but is slow enough to need stress testing
 - [ ] 3–4 `wa_*.cpp` files — each targets a distinct failure mode, has "Fails on:" and "To expose:" comment headers
 - [ ] 1–2 `tle_*.cpp` files — correct logic, wrong complexity; "TLEs on:" header says what input triggers it
+- [ ] Each TLE solution verified locally: `timeout <TL> ./tle_x < adversarial_input` exits non-zero
+- [ ] Graph/tree generators: edges are shuffled with `rnd` or printed in reverse topological order — never bare sequential order
+- [ ] Every `gen_adversarial` and `gen_special` subtype either guarantees node N is reachable or is intentionally testing the -1 case
 - [ ] Constraints in all generator files match the problem statement exactly
-
