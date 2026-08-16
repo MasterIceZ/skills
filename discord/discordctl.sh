@@ -16,12 +16,18 @@ fi
 
 API="https://discord.com/api/v10"
 
-api() { # method path [json-body]
-  local method=$1 path=$2 body=${3:-}
-  curl -s -X "$method" "$API$path" \
-    -H "Authorization: Bot $DISCORD_BOT_TOKEN" \
-    -H "Content-Type: application/json" \
-    ${body:+-d "$body"}
+api() { # method path [json-body] — retries on Discord 429 rate limits
+  local method=$1 path=$2 body=${3:-} resp wait attempt
+  for attempt in 1 2 3; do
+    resp=$(curl -s -X "$method" "$API$path" \
+      -H "Authorization: Bot $DISCORD_BOT_TOKEN" \
+      -H "Content-Type: application/json" \
+      ${body:+-d "$body"})
+    wait=$(jq -r 'if type == "object" then .retry_after // empty else empty end' <<<"$resp" 2>/dev/null)
+    if [ -z "$wait" ]; then printf '%s' "$resp"; return; fi
+    sleep "$wait"
+  done
+  printf '%s' "$resp"
 }
 
 resolve_channel() { # accepts a channel ID, or a user ID (opens a DM)
