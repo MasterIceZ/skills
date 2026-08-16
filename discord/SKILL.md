@@ -19,7 +19,7 @@ Send an embed (title + description card):
 ~/.claude/channels/discord/discordctl.sh embed <channel-or-user-id> <title> <description text>
 ```
 
-**Choosing send vs embed:** use `embed` whenever the content is structured or generated — summaries, reports, digests, multi-line lists, anything that has a natural title. Use plain `send` for short conversational messages (greetings, quick replies, one-liners). Embed descriptions support Discord markdown (`**bold**`, `- lists`, newlines — pass real newlines in the argument) and hold up to 4096 chars; keep the title ≤ 256 chars.
+**Choosing send vs embed:** use `embed` whenever the content is structured or generated — summaries, reports, digests, multi-line lists, anything that has a natural title. Use plain `send` for short conversational messages (greetings, quick replies, one-liners). Embed descriptions support Discord markdown (`**bold**`, `- lists`, newlines — pass real newlines in the argument) and hold up to 4096 chars; keep the title ≤ 256 chars. Every embed automatically carries a "Sent by Claude Code" footer — don't repeat that attribution in the title or description.
 
 Read the last N messages (default 10, oldest first):
 

@@ -46,7 +46,7 @@ case "$cmd" in
     id=$1; title=$2; shift 2
     ch=$(resolve_channel "$id")
     api POST "/channels/$ch/messages" \
-      "$(jq -cn --arg t "$title" --arg d "$*" '{embeds:[{title:$t, description:$d, color:5793266}]}')" \
+      "$(jq -cn --arg t "$title" --arg d "$*" '{embeds:[{title:$t, description:$d, color:5793266, footer:{text:"Sent by Claude Code"}}]}')" \
       | jq -r 'if .id then "sent embed [\(.id)] to channel \(.channel_id)" else "error: \(.message // .)" end'
     ;;
   read)
