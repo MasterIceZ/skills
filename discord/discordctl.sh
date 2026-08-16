@@ -4,6 +4,7 @@
 #
 # Usage:
 #   discordctl.sh send <channel-or-user-id> <message...>
+#   discordctl.sh embed <channel-or-user-id> <title> <description...>
 #   discordctl.sh read <channel-or-user-id> [limit]
 set -euo pipefail
 
@@ -41,6 +42,13 @@ case "$cmd" in
     api POST "/channels/$ch/messages" "$(jq -cn --arg c "$*" '{content:$c}')" \
       | jq -r 'if .id then "sent [\(.id)] to channel \(.channel_id)" else "error: \(.message // .)" end'
     ;;
+  embed)
+    id=$1; title=$2; shift 2
+    ch=$(resolve_channel "$id")
+    api POST "/channels/$ch/messages" \
+      "$(jq -cn --arg t "$title" --arg d "$*" '{embeds:[{title:$t, description:$d, color:5793266}]}')" \
+      | jq -r 'if .id then "sent embed [\(.id)] to channel \(.channel_id)" else "error: \(.message // .)" end'
+    ;;
   read)
     id=$1; limit=${2:-10}
     ch=$(resolve_channel "$id")
@@ -50,7 +58,7 @@ case "$cmd" in
         else "error: \(.message // .)" end'
     ;;
   *)
-    echo "usage: $(basename "$0") send <id> <message...> | read <id> [limit]" >&2
+    echo "usage: $(basename "$0") send <id> <message...> | embed <id> <title> <description...> | read <id> [limit]" >&2
     exit 1
     ;;
 esac

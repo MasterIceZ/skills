@@ -64,7 +64,7 @@ Execute in order. Step 4 requires a secret only the user can provide — if the 
 The user must do this in a browser at https://discord.com/developers/applications — an agent cannot do it for them:
 
 1. **New Application** → name it → **Bot** page → **Reset Token** → copy the token (shown once).
-2. Bot permissions needed by this skill: **View Channels**, **Send Messages**, **Read Message History**. (Message Content Intent is NOT required — that gates gateway events; this skill uses REST only.)
+2. Bot permissions needed by this skill: **View Channels**, **Send Messages**, **Embed Links** (for the `embed` subcommand), **Read Message History**. (Message Content Intent is NOT required — that gates gateway events; this skill uses REST only.)
 3. Invite the bot: **OAuth2 → URL Generator** → scope `bot` → the three permissions above → open the generated URL and add the bot to the target server. To DM a user, the bot must share at least one server with them.
 
 ## Important constraints (for the installing agent)

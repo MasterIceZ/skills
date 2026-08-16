@@ -7,11 +7,19 @@ description: Send or read Discord messages on demand via one-shot bot REST calls
 
 The `discord@claude-plugins-official` plugin is **intentionally disabled** — its MCP server keeps a persistent Bun process with a live Discord gateway connection, which drains laptop power. Do not re-enable it. Use the helper script instead; it makes single REST calls with the bot token stored in `~/.claude/channels/discord/.env` and exits immediately.
 
-Send a message:
+Send a plain message:
 
 ```bash
 ~/.claude/channels/discord/discordctl.sh send <channel-or-user-id> <message text>
 ```
+
+Send an embed (title + description card):
+
+```bash
+~/.claude/channels/discord/discordctl.sh embed <channel-or-user-id> <title> <description text>
+```
+
+**Choosing send vs embed:** use `embed` whenever the content is structured or generated — summaries, reports, digests, multi-line lists, anything that has a natural title. Use plain `send` for short conversational messages (greetings, quick replies, one-liners). Embed descriptions support Discord markdown (`**bold**`, `- lists`, newlines — pass real newlines in the argument) and hold up to 4096 chars; keep the title ≤ 256 chars.
 
 Read the last N messages (default 10, oldest first):
 
