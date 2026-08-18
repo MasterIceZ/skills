@@ -1,6 +1,6 @@
 ---
 name: polygon-test-generator-cafe
-description: Generate cafe-grader-style test data (per-test scoring, NO groups) from a competitive programming problem statement and solutions. Like polygon-test-generator-ioi but every test carries its own score: at most 50 tests ALWAYS, full score exactly 100, and every per-test score an exact decimal (4, 5, 2.5 — never 100/3 = 0.333…). Produces testlib.h-based generators, a full-constraint validator, hand-crafted tests per constraint tier, tier-specific partial solutions (sol_st1.cpp, …), wrong/TLE solutions, a flat test script, and a scores.txt manifest. Always use this skill when the user wants tests for cafe-grader ("cafe", "cafe-grader", "grader.in.th") or any judge with per-test scores and no subtask grouping.
+description: Generate cafe-grader-style test data (per-test scoring, NO groups) from a competitive programming problem statement and solutions. Like polygon-test-generator-ioi but scoring is per test: subtasks remain as SCORE GOALS (e.g., subtask 1 = 20 pts, subtask 2 = 30 pts, … summing to exactly 100) whose points are split across that subtask's individual tests; at most 50 tests ALWAYS; every per-test score an exact decimal (4, 5, 2.5 — never 100/3 = 0.333…). Produces testlib.h-based generators, a full-constraint validator, hand-crafted tests per subtask, subtask-specific partial solutions (sol_st1.cpp, …), wrong/TLE solutions, a flat test script, and a scores.txt manifest. Always use this skill when the user wants tests for cafe-grader ("cafe", "cafe-grader", "grader.in.th") or any judge with per-test scores and no subtask grouping.
 ---
 
 # Cafe-Grader Test Generator
@@ -12,27 +12,27 @@ cafe-grader scores **every test file individually** — there are no subtask gro
 2. **The full score is exactly 100.**
 3. **Every per-test score is an exact decimal** — integers or clean halves like 2.5, never a repeating decimal (100/3 = 0.333… is forbidden). Prefer integers.
 
-Constraint **tiers** (what IOI calls subtasks) remain the core design tool: they structure the generators, the partial-solution ladder, and how the 100 points are spread — but scoring is strictly per test.
+**Subtasks still exist — as score goals.** Define subtasks exactly as in the IOI skill and give each one a score goal (e.g., subtask 1 = 20 points, subtask 2 = 30, …) with the goals summing to exactly 100. The statement shows these goals like any IOI problem; only the grader differs: a subtask's goal is split across its individual tests, and a contestant simply earns the points of every test they pass — no group all-or-nothing rule.
 
 ## What You Produce
 
 | File | Purpose |
 |------|---------|
-| `generators/gen_edge.cpp` | Edge/corner cases, tier-aware |
-| `generators/gen_random.cpp` | Random tests, tier-aware |
+| `generators/gen_edge.cpp` | Edge/corner cases, subtask-aware |
+| `generators/gen_random.cpp` | Random tests, subtask-aware |
 | `generators/gen_adversarial.cpp` | Worst-case inputs |
 | `generators/gen_special.cpp` | Structural inputs (algebraic/combinatorial shapes) |
 | `generators/gen_stress.cpp` | Tiny tests for stress testing against brute |
 | `validator.cpp` | Validates input against the full constraint set (no groups) |
-| `tier1/01`, `tier1/02`, … | Hand-crafted tests, organized per tier |
-| `tier2/01`, `tier2/02`, … | (repeat for each tier) |
+| `st1/01`, `st1/02`, … | Hand-crafted tests, organized per subtask |
+| `st2/01`, `st2/02`, … | (repeat for each subtask) |
 | `script.txt` | Flat test script — no group markers |
 | `scores.txt` | Per-test score manifest — exact decimals, sums to exactly 100 |
 | `solutions/sol.cpp` | Model solution (full score) — fix/confirm the provided one |
-| `solutions/brute.cpp` | Correct but slow (handles all small tiers) |
-| `solutions/sol_st1.cpp` | Passes **only** tier 1 |
-| `solutions/sol_st1_2.cpp` | Passes tiers 1–2 |
-| `solutions/sol_st1_2_3.cpp` | Passes tiers 1–3 (if ≥4 tiers exist) |
+| `solutions/brute.cpp` | Correct but slow (handles all small subtasks) |
+| `solutions/sol_st1.cpp` | Passes **only** subtask 1 |
+| `solutions/sol_st1_2.cpp` | Passes subtasks 1–2 |
+| `solutions/sol_st1_2_3.cpp` | Passes subtasks 1–3 (if ≥4 subtasks exist) |
 | `solutions/wa_*.cpp` | Wrong-answer solutions (3–4 distinct failure modes) |
 | `solutions/tle_*.cpp` | Correct-logic but TLE solutions (1–2 files) |
 
@@ -43,7 +43,7 @@ problem/
 ├── generators/     # every gen_*.cpp
 ├── solutions/      # model + brute + partial ladder + wa_* + tle_*
 ├── validator.cpp   # stays at the package root (own upload slot in Polygon)
-├── tier1/ … tierK/     # hand-crafted tests per tier
+├── st1/ … stK/     # hand-crafted tests per subtask
 ├── script.txt
 └── scores.txt      # test → points manifest (sums to exactly 100)
 ```
@@ -54,31 +54,31 @@ Compiled binaries and generated tests go in a local `build/` directory — never
 
 ---
 
-## Step 0 — Identify and Define Tiers
+## Step 0 — Identify and Define Subtasks
 
-Before writing any generator, extract (or infer) the tier structure. This is the foundation everything else is built on.
+Before writing any generator, extract (or infer) the subtask structure. This is the foundation everything else is built on.
 
 ### From the problem statement
 
-Read every "Subtask" or "Constraints" section (IOI-style statements often define subtasks — adopt them as tiers). Produce a table:
+Read every "Subtask" or "Constraints" section. Produce a table — the Points column holds each subtask's score goal and MUST sum to exactly 100:
 
-| Tier | Points | Additional constraints |
+| Subtask | Points | Additional constraints |
 |---------|--------|----------------------|
 | 1 | p₁ | N ≤ 10, no further constraints |
 | 2 | p₂ | N ≤ 1 000 |
 | 3 | p₃ | All aᵢ equal |
 | 4 | p₄ | No further constraints (N ≤ 100 000) |
 
-Tiers are **cumulative**: tier k tests are also valid tier k−1 inputs (unless stated otherwise, e.g., "exactly k distinct values"). The final tier is always the full constraint set.
+Subtasks are **cumulative**: subtask k tests are also valid subtask k−1 inputs (unless stated otherwise, e.g., "exactly k distinct values"). The final subtask is always the full constraint set.
 
-### If tiers are missing or too coarse
+### If subtasks are missing or too coarse
 
-Aim for 3–5 tiers. If the statement gives fewer (or none), **add intermediate tiers** at natural algorithmic complexity boundaries:
+Aim for 3–5 subtasks. If the statement gives fewer (or none), **add intermediate subtasks** at natural algorithmic complexity boundaries:
 
 - After the brute-force boundary (N ≤ 10 or N ≤ 100 for O(N³) or O(N²) brutes)
 - After the quadratic boundary (N ≤ 3 000–5 000 for O(N²))
 - After the N log N boundary (N ≤ 100 000)
-- Any problem-specific structural tier (e.g., "tree is a path/star", "all values distinct", "graph is bipartite")
+- Any problem-specific structural subtask (e.g., "tree is a path/star", "all values distinct", "graph is bipartite")
 
 ---
 
@@ -88,11 +88,16 @@ Before writing any generator, decide the exact test count and every test's score
 
 - **Total tests ≤ 50** (hand-crafted + generated combined). Target 20–40.
 - **Scores sum to exactly 100.**
-- **Every score is an exact decimal.** Prefer integers; halves (2.5) are acceptable; anything repeating is not. For uniform scoring pick a count from {10, 20, 25, 40, 50} → {10, 5, 4, 2.5, 2} points per test. Otherwise assign per-tier values that stay integer/half.
+- **Every score is an exact decimal.** Prefer integers; halves (2.5) are acceptable; anything repeating is not.
 
-Allocate points per tier like IOI weights, then split evenly inside each tier. Example, 4 tiers mirroring a 20/20/25/35 split:
+Budget in two stages:
 
-| Tier | Tests | Points each | Subtotal |
+1. **Give each subtask a score goal** — integers summing to exactly 100 (e.g., 20 / 20 / 25 / 35, or 20 / 30 / 50). These goals appear in the statement ("Subtask 1 (20 points): …") exactly like an IOI problem.
+2. **Split each goal across that subtask's tests.** Pick the test count so every per-test score stays an exact decimal: uniform `goal / count` (20 pts → 4, 5, 8, or 10 tests; 25 pts → 5 or 10 tests) or a non-uniform integer split (30 = 4+4+4+4+4+5+5). The per-test scores of a subtask must sum exactly to its goal.
+
+Example, 4 subtasks with goals 20 / 20 / 25 / 35:
+
+| Subtask | Tests | Points each | Subtotal |
 |------|-------|-------------|----------|
 | 1 | 5 | 4 | 20 |
 | 2 | 5 | 4 | 20 |
@@ -102,11 +107,11 @@ Allocate points per tier like IOI weights, then split evenly inside each tier. E
 
 Per-test scoring has NO group all-or-nothing effect — a wrong solution keeps the points of every individual test it sneaks past. Therefore:
 
-- Each failure mode needs **multiple** killer tests spread across tiers; one killer only costs one test's points.
-- With so few tests, every test must earn its slot: pick each generator's single most lethal subtype per tier instead of enumerating all subtypes.
+- Each failure mode needs **multiple** killer tests spread across subtasks; one killer only costs one test's points.
+- With so few tests, every test must earn its slot: pick each generator's single most lethal subtype per subtask instead of enumerating all subtypes.
 - Compute the expected score of every partial/wa/tle solution from the per-test budget and verify it empirically (Step 13).
 
-Announce the final tier table AND this budget to the user before proceeding.
+Announce the final subtask table AND this budget to the user before proceeding.
 
 ---
 
@@ -115,7 +120,7 @@ Announce the final tier table AND this budget to the user before proceeding.
 Extract:
 
 - **Input format**: variable names, structure, exact reading order
-- **Full constraints**: every bound across all tiers
+- **Full constraints**: every bound across all subtasks
 - **Multiple test cases?** If first line is T, note it — handle T-wrapping in all generators
 - **Output spec**: unique answer, any valid answer, yes/no, floating point — decide if the answer is unique. A **custom checker** is needed whenever multiple outputs are valid: printing an actual path/assignment/permutation (not just its cost), any-valid-answer constructive problems, floating point with tolerance. If a checker is needed, note it but don't generate it — it's too problem-specific.
 - **Problem type**: see heuristics table at the end
@@ -138,26 +143,26 @@ If no brute force is provided, write one (see Step 8).
 
 ## Step 3 — Write generators/gen_edge.cpp
 
-Generates deterministic edge and corner cases. Takes `tier` and `subtype` arguments.
+Generates deterministic edge and corner cases. Takes `subtask` and `subtype` arguments.
 
 ```cpp
 #include "testlib.h"
 #include <bits/stdc++.h>
 using namespace std;
 
-// Per-tier N limits — match your tier table exactly
+// Per-subtask N limits — match your subtask table exactly
 const int MAXN_ST[] = {0, 10, 1000, 5000, 100000};  // index 0 unused
 
 int main(int argc, char* argv[]) {
     registerGen(argc, argv, 1);
-    int st      = argc > 1 ? atoi(argv[1]) : 4;   // tier
+    int st      = argc > 1 ? atoi(argv[1]) : 4;   // subtask
     int subtype = argc > 2 ? atoi(argv[2]) : 0;
 
     int MAXN = MAXN_ST[st];
 
     // subtype 0: N = 1 (minimum)
-    // subtype 1: N = MAXN for this tier, all values = MINVAL
-    // subtype 2: N = MAXN for this tier, all values = MAXVAL
+    // subtype 1: N = MAXN for this subtask, all values = MINVAL
+    // subtype 2: N = MAXN for this subtask, all values = MAXVAL
     // subtype 3: N = MAXN, sorted ascending
     // subtype 4: N = MAXN, sorted descending
     // subtype 5+: problem-specific edges
@@ -167,13 +172,13 @@ int main(int argc, char* argv[]) {
 }
 ```
 
-The `st` argument controls which tier's N limit is used — `gen_edge 1 0` produces a tiny N=1 case for tier 1, while `gen_edge 4 1` produces a max-N edge case for the final tier.
+The `st` argument controls which subtask's N limit is used — `gen_edge 1 0` produces a tiny N=1 case for subtask 1, while `gen_edge 4 1` produces a max-N edge case for the final subtask.
 
 ---
 
 ## Step 4 — Write generators/gen_random.cpp
 
-Generates random tests within a tier's constraint range. Takes `tier`, `n` (optional), and a seed.
+Generates random tests within a subtask's constraint range. Takes `subtask`, `n` (optional), and a seed.
 
 ```cpp
 #include "testlib.h"
@@ -189,22 +194,22 @@ int main(int argc, char* argv[]) {
     int n    = argc > 2 ? min(atoi(argv[2]), MAXN) : rnd.next(1, MAXN);
     // argv[3] acts as seed suffix (no need to read it — testlib uses all argv for seeding)
 
-    // Generate n, then generate values/edges/etc. within tier constraints.
-    // Tier-specific constraints (e.g., "all aᵢ equal" for tier 3) must be enforced here.
+    // Generate n, then generate values/edges/etc. within subtask constraints.
+    // Subtask-specific constraints (e.g., "all aᵢ equal" for subtask 3) must be enforced here.
     // print in exact input format
     return 0;
 }
 ```
 
-**Important:** enforce per-tier constraints inside the generator, not just by size. If tier 3 requires all values equal, `gen_random 3 500` must produce all-equal values even at N=500 — the constraint is structural, not just a bound.
+**Important:** enforce per-subtask constraints inside the generator, not just by size. If subtask 3 requires all values equal, `gen_random 3 500` must produce all-equal values even at N=500 — the constraint is structural, not just a bound.
 
-To get distinct tests at the same tier+size, append a different trailing integer — `gen_random 4 100000 1` and `gen_random 4 100000 2` produce completely different tests.
+To get distinct tests at the same subtask+size, append a different trailing integer — `gen_random 4 100000 1` and `gen_random 4 100000 2` produce completely different tests.
 
 ---
 
 ## Step 5 — Write generators/gen_special.cpp
 
-Generates structural inputs with mathematical shapes. Takes `tier` and `subtype`.
+Generates structural inputs with mathematical shapes. Takes `subtask` and `subtype`.
 
 ```cpp
 #include "testlib.h"
@@ -230,13 +235,13 @@ int main(int argc, char* argv[]) {
 }
 ```
 
-Aim for 4–6 subtypes per generator. For maximum-constraint tiers (the final ones), use `MAXN_ST[4]`; for earlier tiers, cap to their bounds.
+Aim for 4–6 subtypes per generator. For maximum-constraint subtasks (the final ones), use `MAXN_ST[4]`; for earlier subtasks, cap to their bounds.
 
 ---
 
 ## Step 6 — Write generators/gen_stress.cpp
 
-Tiny tests for stress testing against `brute.cpp`. Capped well below even tier 1's limit.
+Tiny tests for stress testing against `brute.cpp`. Capped well below even subtask 1's limit.
 
 ```cpp
 #include "testlib.h"
@@ -251,8 +256,8 @@ int main(int argc, char* argv[]) {
     registerGen(argc, argv, 1);
     int n = argc > 1 ? atoi(argv[1]) : rnd.next(1, STRESS_MAXN);
     // Same structure as gen_random but capped at STRESS_MAXN.
-    // Do NOT enforce tier-specific structural constraints here — stress testing
-    // should explore the full valid space even if it crosses tier boundaries.
+    // Do NOT enforce subtask-specific structural constraints here — stress testing
+    // should explore the full valid space even if it crosses subtask boundaries.
     return 0;
 }
 ```
@@ -261,7 +266,7 @@ int main(int argc, char* argv[]) {
 
 ## Step 7 — Write generators/gen_adversarial.cpp
 
-Worst-case inputs designed to break naive solutions. Takes `tier` and `subtype`.
+Worst-case inputs designed to break naive solutions. Takes `subtask` and `subtype`.
 
 ```cpp
 #include "testlib.h"
@@ -276,7 +281,7 @@ int main(int argc, char* argv[]) {
     int subtype = argc > 2 ? atoi(argv[2]) : 0;
     int MAXN    = MAXN_ST[st];
 
-    // Always use maximum N for the given tier.
+    // Always use maximum N for the given subtask.
     // subtype 0: worst case for O(N²) naive — sorted ascending
     // subtype 1: worst case for greedy — carefully constructed counter-example
     // subtype 2+: problem-specific
@@ -291,17 +296,17 @@ int main(int argc, char* argv[]) {
 
 ---
 
-## Step 8 — Write Tier-Specific Solutions
+## Step 8 — Write Subtask-Specific Solutions
 
-The ladder still matters under per-test scoring: each rung collects exactly the points of the tests it passes. Write one solution per tier boundary — each passes all tiers up to k but is **intentionally too slow or wrong** for tier k+1.
+The ladder still matters under per-test scoring: each rung collects exactly the points of the tests it passes. Write one solution per subtask boundary — each passes all subtasks up to k but is **intentionally too slow or wrong** for subtask k+1.
 
-### solutions/brute.cpp — Tier 1 boundary
+### solutions/brute.cpp — Subtask 1 boundary
 
-Simple, obviously-correct, slow solution. Should pass tier 1 (and maybe 2) but TLE on higher tiers.
+Simple, obviously-correct, slow solution. Should pass subtask 1 (and maybe 2) but TLE on higher subtasks.
 
 ```cpp
 // brute.cpp — O(?) brute force, correct but too slow for large N
-// Passes: tier 1 (N ≤ 10), possibly tier 2 (N ≤ 1000) if fast enough
+// Passes: subtask 1 (N ≤ 10), possibly subtask 2 (N ≤ 1000) if fast enough
 // Use for stress testing: diff <(./sol < test) <(./brute < test)
 #include <bits/stdc++.h>
 using namespace std;
@@ -310,55 +315,55 @@ int main() {
 }
 ```
 
-### solutions/sol_st1.cpp — Passes only tier 1
+### solutions/sol_st1.cpp — Passes only subtask 1
 
-A solution whose algorithm is correct for the small constraints of tier 1 but is too slow or has a missing case for larger inputs. Typical: O(N^k) with large k, or a special-case solution that only handles the structural constraint of tier 1.
+A solution whose algorithm is correct for the small constraints of subtask 1 but is too slow or has a missing case for larger inputs. Typical: O(N^k) with large k, or a special-case solution that only handles the structural constraint of subtask 1.
 
 ```cpp
-// sol_st1.cpp — Passes tier 1 (N ≤ 10) ONLY
+// sol_st1.cpp — Passes subtask 1 (N ≤ 10) ONLY
 // Algorithm: [name the algorithm]
-// Why it fails tier 2+: [TLE at O(N³), or missing case for larger N, etc.]
+// Why it fails subtask 2+: [TLE at O(N³), or missing case for larger N, etc.]
 #include <bits/stdc++.h>
 using namespace std;
 int main() { /* ... */ }
 ```
 
-### solutions/sol_st1_2.cpp — Passes tiers 1–2
+### solutions/sol_st1_2.cpp — Passes subtasks 1–2
 
-Passes up through tier 2 (e.g., N ≤ 1 000) but not further. Usually an O(N²) algorithm.
+Passes up through subtask 2 (e.g., N ≤ 1 000) but not further. Usually an O(N²) algorithm.
 
 ```cpp
-// sol_st1_2.cpp — Passes tiers 1–2 (N ≤ 1000) ONLY
+// sol_st1_2.cpp — Passes subtasks 1–2 (N ≤ 1000) ONLY
 // Algorithm: [e.g., O(N²) DP]
-// Why it fails tier 3+: [TLE at N=5000, or missing structural tier constraint]
+// Why it fails subtask 3+: [TLE at N=5000, or missing structural subtask constraint]
 #include <bits/stdc++.h>
 using namespace std;
 int main() { /* ... */ }
 ```
 
-### solutions/sol_st1_2_3.cpp — Passes tiers 1–3 (if ≥4 tiers)
+### solutions/sol_st1_2_3.cpp — Passes subtasks 1–3 (if ≥4 subtasks)
 
-Only needed when there are 4+ tiers. This solution is the "good but not full" contestant submission.
+Only needed when there are 4+ subtasks. This solution is the "good but not full" contestant submission.
 
 ```cpp
-// sol_st1_2_3.cpp — Passes tiers 1–3 ONLY
+// sol_st1_2_3.cpp — Passes subtasks 1–3 ONLY
 // Algorithm: [e.g., O(N log² N)]
-// Why it fails tier 4+: [explain the gap]
+// Why it fails subtask 4+: [explain the gap]
 #include <bits/stdc++.h>
 using namespace std;
 int main() { /* ... */ }
 ```
 
-### Selecting the right algorithm per tier boundary
+### Selecting the right algorithm per subtask boundary
 
-| Tier | Typical N limit | Common algorithm class |
+| Subtask | Typical N limit | Common algorithm class |
 |---------|----------------|----------------------|
 | 1 | ≤ 10–100 | Brute force / O(N^k) |
 | 2 | ≤ 1 000–3 000 | O(N²) DP or O(N² log N) |
 | 3 | ≤ 10 000–50 000 | O(N log N) or O(N√N) |
 | 4 (full) | ≤ 100 000–500 000 | O(N log N) or better |
 
-If the problem has structural tiers (e.g., "tree is a path"), write the specialized solution that only handles that structure and breaks on a general input.
+If the problem has structural subtasks (e.g., "tree is a path"), write the specialized solution that only handles that structure and breaks on a general input.
 
 ---
 
@@ -386,7 +391,7 @@ Correct logic but too-high complexity. Model realistic contestant mistakes.
 ```cpp
 // tle_n2.cpp — CORRECT but O(N²): [describe the approach]
 // TLEs on: N ≥ [threshold] — triggers with gen_adversarial 4 0
-// Passes: tier 1 and 2 (same as sol_st1_2.cpp but written independently)
+// Passes: subtask 1 and 2 (same as sol_st1_2.cpp but written independently)
 #include <bits/stdc++.h>
 using namespace std;
 int main() { /* ... */ }
@@ -406,9 +411,9 @@ int main(int argc, char* argv[]) {
     registerValidation(argc, argv);
 
     // cafe-grader has no test groups — validate the FULL constraint set only.
-    // Tier-specific bounds are the generators' responsibility (checked by the
+    // Subtask-specific bounds are the generators' responsibility (checked by the
     // per-test budget review), NOT the validator's: every single test, whatever
-    // tier it was designed for, must pass this one validator.
+    // subtask it was designed for, must pass this one validator.
 
     // Read input exactly as the problem specifies.
     // Key methods:
@@ -427,13 +432,13 @@ int main(int argc, char* argv[]) {
 
 ## Step 11 — Hand-crafted Test Files
 
-Create a directory per tier (`tier1/`, `tier2/`, …). Within each, write 1–2 static tests — they count toward the ≤ 50 budget:
+Create a directory per subtask (`st1/`, `st2/`, …). Within each, write 1–2 static tests — they count toward the ≤ 50 budget:
 
-- `01` — minimum valid input within tier constraints (N=1 or simplest)
-- `02` — maximum N for this tier, all maximum values
-- `03` — problem-specific must-have for this tier (e.g., if tier 3 restricts to "path graphs", include the extremal path)
+- `01` — minimum valid input within subtask constraints (N=1 or simplest)
+- `02` — maximum N for this subtask, all maximum values
+- `03` — problem-specific must-have for this subtask (e.g., if subtask 3 restricts to "path graphs", include the extremal path)
 
-Tests for tier k must satisfy **all** constraints of tier k (they will also implicitly satisfy tiers 1 through k−1).
+Tests for subtask k must satisfy **all** constraints of subtask k (they will also implicitly satisfy subtasks 1 through k−1).
 
 ---
 
@@ -441,9 +446,9 @@ Tests for tier k must satisfy **all** constraints of tier k (they will also impl
 
 ### Flat script — no group markers
 
-cafe-grader has no groups, so `script.txt` is a flat list of generator calls with NO `@N` markers. Hand-crafted tests are uploaded first (manual tests), generated ones follow. The TOTAL (manual + generated) must respect the Step 0.5 budget — never more than 50. Choose each generator's single most lethal subtype per tier.
+cafe-grader has no groups, so `script.txt` is a flat list of generator calls with NO `@N` markers. Hand-crafted tests are uploaded first (manual tests), generated ones follow. The TOTAL (manual + generated) must respect the Step 0.5 budget — never more than 50. Choose each generator's single most lethal subtype per subtask.
 
-Example matching the 22-test budget above (5 hand-crafted in tier dirs + 17 generated):
+Example matching the 22-test budget above (5 hand-crafted in subtask dirs + 17 generated):
 
 ```
 gen_edge 1 0 > $
@@ -470,14 +475,19 @@ gen_adversarial 4 3 > $
 One line per test **in final judge order** (manual tests first): `test_number  score  source`. `#` starts a comment.
 
 ```
-1   4  tier1/01
-2   4  tier1/02
+# subtask 1 — goal 20 (5 tests x 4)
+1   4  st1/01
+2   4  st1/02
 3   4  gen_edge 1 0
 4   4  gen_edge 1 3
+5   4  gen_random 1 1000 1
+# subtask 2 — goal 20 (5 tests x 4)
+6   4  st2/01
 ...
-21  5  gen_special 4 3
+# subtask 4 — goal 35 (7 tests x 5)
+...
 22  5  gen_adversarial 4 3
-# 22 tests, sum = 100
+# 22 tests; goals 20+20+25+35 = 100
 ```
 
 Machine-check before finishing: line count ≤ 50, scores sum to exactly 100, every score an exact decimal.
@@ -522,17 +532,17 @@ done
 echo "Stress test done."
 ```
 
-Also include a tier validation check:
+Also include a subtask validation check:
 
 ```bash
-# Verify tier solutions pass their expected tiers
+# Verify subtask solutions pass their expected subtasks
 g++ -O2 -std=c++17 -o build/sol_st1 solutions/sol_st1.cpp
-for f in tier1/*; do
+for f in st1/*; do
     build/sol_st1 < "$f" > /tmp/out.txt
     build/sol     < "$f" > /tmp/ref.txt
     diff /tmp/out.txt /tmp/ref.txt || echo "FAIL: $f"
 done
-echo "Tier 1 solution verified."
+echo "Subtask 1 solution verified."
 ```
 
 ---
@@ -582,11 +592,12 @@ For **graph** problems: always include a path graph and a star. If M allows it, 
 
 ## Final Checklist
 
-- [ ] Tier table AND test/score budget shown to user (≤ 50 tests, sum exactly 100, exact decimals)
+- [ ] Subtask table with per-subtask score goals shown to user (goals sum to exactly 100; ≤ 50 tests total)
+- [ ] Per-test scores inside each subtask sum exactly to that subtask's goal, every one an exact decimal
 - [ ] Generators in `generators/`, all solutions in `solutions/`, `validator.cpp` at the root
 - [ ] All generator files compile: `g++ -O2 -I. generators/gen_edge.cpp -o build/gen_edge` etc.
 - [ ] `validator.cpp` reads input in exact format; validates the FULL constraint set (no groups)
-- [ ] Hand-crafted tests exist in `tierK/` directories for each tier K
+- [ ] Hand-crafted tests exist in `stK/` directories for each subtask K
 - [ ] All hand-crafted tests pass the validator
 - [ ] `script.txt` is flat — no `@N` markers; manual + generated test count ≤ 50
 - [ ] `scores.txt` lists every test in judge order; scores are exact decimals summing to exactly 100
@@ -594,13 +605,13 @@ For **graph** problems: always include a path graph and a star. If M allows it, 
 - [ ] No two lines in `script.txt` share the same generator+arguments — every repeated call has a distinct trailing seed
 - [ ] `gen_random` clamps m to `max(n-1, atoi(argv[...]))` so seed suffixes never produce an invalid edge count
 - [ ] `gen_special` subtypes each encode a distinct structural shape
-- [ ] `gen_stress` caps N well below tier 1's limit for fast brute runs
-- [ ] `solutions/brute.cpp` gives correct output; passes tier 1 (and maybe 2)
-- [ ] `solutions/sol_st1.cpp` exists and passes ONLY tier 1; comment explains why it fails tier 2+
-- [ ] `solutions/sol_st1_2.cpp` exists and passes ONLY tiers 1–2; comment explains failure mode
-- [ ] `solutions/sol_st1_2_3.cpp` exists if ≥4 tiers; comment explains failure mode
+- [ ] `gen_stress` caps N well below subtask 1's limit for fast brute runs
+- [ ] `solutions/brute.cpp` gives correct output; passes subtask 1 (and maybe 2)
+- [ ] `solutions/sol_st1.cpp` exists and passes ONLY subtask 1; comment explains why it fails subtask 2+
+- [ ] `solutions/sol_st1_2.cpp` exists and passes ONLY subtasks 1–2; comment explains failure mode
+- [ ] `solutions/sol_st1_2_3.cpp` exists if ≥4 subtasks; comment explains failure mode
 - [ ] 3–4 `wa_*.cpp` files with "Fails on:" and "To expose:" comment headers
 - [ ] 1–2 `tle_*.cpp` files with "TLEs on:" header
 - [ ] Graph/tree generators: edges shuffled or reverse-topological — never bare sequential
 - [ ] Every adversarial/special generator guarantees reachability or is intentionally testing the -1 case
-- [ ] Constraints in all generators match the tier table exactly
+- [ ] Constraints in all generators match the subtask table exactly
