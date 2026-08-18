@@ -360,6 +360,29 @@ int main() { /* ... */ }
 
 ---
 
+## Step 9.5 — Tag Every Solution for Polygon
+
+Polygon asks for a **solution type** per file and verifies it: a tag claiming more than the solution does makes Polygon's solution check fail, blocking the package. The tag describes *how* the solution fails, not how badly.
+
+| Polygon tag | Means | Use for |
+|-------------|-------------|---------|
+| **Main correct solution** | passes every test; exactly one per problem | the model solution |
+| **Correct** | passes every test | a second, independently written full solution |
+| **Wrong answer** | produces WA somewhere, and **never** TLEs/crashes | `wa_*.cpp`, and fast-but-wrong partials |
+| **Time limit exceeded** | TLEs somewhere, and is **never** wrong where it finishes | `brute.cpp`, `tle_*.cpp`, partials that are only ever too slow |
+| **Time limit exceeded or correct** | may TLE or may pass; never wrong | borderline solutions you don't want to pin down |
+| **Memory limit exceeded** | exceeds the memory limit | only a deliberately memory-hungry file |
+| **Presentation error** | right values, malformed formatting | only if the checker distinguishes PE |
+| **Incorrect** | fails *somehow* — the catch-all | **any solution with a MIXED failure profile** |
+
+**The purity rule, and why `Incorrect` exists.** Subtask ladder solutions frequently fail two different ways: too slow on the big subtasks *and* plain wrong on a subtask whose inputs they mishandle. Such a file is neither `Wrong answer` nor `Time limit exceeded` — it must be **`Incorrect`**. A common instance: an O(N·M) solution that also reads values into `int` TLEs the max-size groups but wrong-answers the small tests carrying out-of-range values.
+
+**Classify empirically — never infer the tag from reading the source.** Run every solution over every test, record the verdict kind per test (OK / WA / TLE / RTE), and derive the tag from the observed set: `{OK}` → Correct, `{OK, WA}` → Wrong answer, `{OK, TLE}` → Time limit exceeded, anything else mixed → Incorrect.
+
+Report a table to the user (file → tag → observed mix → expected subtask score) so tagging at upload time is mechanical. The tag and the score are separate facts — a solution's group score says nothing about which tag Polygon will accept.
+
+---
+
 ## Step 10 — Write validator.cpp
 
 The validator lives at the package root, not in `generators/` — Polygon uploads it in its own slot.
@@ -570,6 +593,7 @@ For **graph** problems: always include a path graph and a star. If M allows it, 
 - [ ] `solutions/sol_st1_2_3.cpp` exists if ≥4 subtasks; comment explains failure mode
 - [ ] 3–4 `wa_*.cpp` files with "Fails on:" and "To expose:" comment headers
 - [ ] 1–2 `tle_*.cpp` files with "TLEs on:" header
+- [ ] Every solution has a Polygon tag derived from its **observed** verdict mix (Step 9.5), not from reading the source; any mixed WA+TLE file is tagged `Incorrect`
 - [ ] Graph/tree generators: edges shuffled or reverse-topological — never bare sequential
 - [ ] Every adversarial/special generator guarantees reachability or is intentionally testing the -1 case
 - [ ] Constraints in all generators match the subtask table exactly

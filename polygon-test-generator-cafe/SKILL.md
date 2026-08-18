@@ -404,6 +404,47 @@ int main() { /* ... */ }
 
 ---
 
+## Step 9.5 — Tag Every Solution for Polygon
+
+Polygon asks for a **solution type** per file and then verifies it: a tag that claims more than the solution does will make Polygon's solution check fail, blocking the package. The tag describes *how* the solution fails, not how badly.
+
+| Polygon tag | Means | Use for |
+|-------------|-------------|---------|
+| **Main correct solution** | passes every test; exactly one per problem | `sol.cpp` |
+| **Correct** | passes every test | `ref_array.cpp` and any other full solution |
+| **Wrong answer** | produces WA somewhere, and **never** TLEs/crashes | `wa_*.cpp`, and a fast-but-wrong partial (e.g. one that overflows `int` on the last subtask) |
+| **Time limit exceeded** | TLEs somewhere, and is **never** wrong where it finishes | `brute.cpp`, `tle_*.cpp`, and any partial that is only ever too slow |
+| **Time limit exceeded or correct** | may TLE or may pass; never wrong | borderline solutions you don't want to pin down |
+| **Memory limit exceeded** | exceeds the memory limit | only a deliberately memory-hungry file |
+| **Presentation error** | right values, malformed formatting | only if the checker distinguishes PE |
+| **Incorrect** | fails *somehow* — the catch-all | **any solution with a MIXED failure profile** |
+
+**The purity rule, and why `Incorrect` exists.** A partial solution often fails two different ways: too slow on the big tests, and plain wrong on a subtask whose inputs it mishandles. Such a file is neither `Wrong answer` nor `Time limit exceeded` — it must be **`Incorrect`**. A very common instance: a solution that is O(N·M) *and* reads values into `int` TLEs on max-size tests but wrong-answers the small tests with out-of-range values.
+
+**Classify empirically — never infer the tag from reading the source.** For every solution, run all tests and record the verdict kind per test (OK / WA / TLE / RTE), then derive the tag from the observed mix:
+
+```python
+# per solution: run each test, classify, then tag from the set of kinds seen
+#   {OK}                -> Correct (or Main correct solution)
+#   {OK, WA}            -> Wrong answer
+#   {OK, TLE}           -> Time limit exceeded
+#   anything else mixed -> Incorrect
+kinds = set()
+for t in tests:
+    r = run(sol, t, timeout=2 * TL)
+    if   r.timed_out:            kinds.add("TLE")
+    elif r.returncode != 0:      kinds.add("RTE")
+    elif r.output != answer[t]:  kinds.add("WA")
+    elif r.elapsed > TL:         kinds.add("TLE")
+    else:                        kinds.add("OK")
+```
+
+Report the resulting table to the user (file → tag → observed mix → cafe score) so tagging at upload time is mechanical. Note that under per-test scoring a wrong solution still keeps the points of every test its bug doesn't reach, so the *score* and the *tag* are separate facts — record both.
+
+These tags matter only to Polygon; cafe-grader has no notion of solution types, and there the expected score is what counts.
+
+---
+
 ## Step 10 — Write validator.cpp
 
 The validator lives at the package root, not in `generators/` — Polygon uploads it in its own slot.
@@ -534,7 +575,26 @@ Machine-check before finishing: line count ≤ 50, ALL scores identical, total e
 
 ### Polygon is still the upload target
 
-Upload generators (including `gen_manual.cpp`), solutions, and the validator to **Polygon** exactly as in the IOI skill, then paste the flat script — keep Polygon's groups and points OFF. Because `gen_manual` carries the hand-crafted tests, there are **no manual test uploads at all** and Polygon's test indices match `scores.txt` 1:1. cafe-grader format is the harness constraint the test plan is designed around, not a direct upload destination. ### Polygon package → cafe-grader judge data
+Upload to **Polygon** exactly as in the IOI skill, then paste the flat script — keep Polygon's groups and points OFF. cafe-grader format is the harness constraint the test plan is designed around, not a direct upload destination.
+
+**Upload map — what goes where, and what is NOT uploaded:**
+
+| Item | Where it goes in Polygon | Manual upload? |
+|------|--------------------------|----------------|
+| `generators/*.cpp` (incl. `gen_manual.cpp`) | Files → Generators | yes, as source files |
+| `solutions/*.cpp` | Solutions, each with its **Step 9.5 tag** | yes, as source files |
+| `validator.cpp` | Validator slot | yes, as a source file |
+| `script.txt` | Tests → script | paste its contents |
+| **The tests themselves** | produced by the script | **NO — none are manual tests** |
+| `stK/xx` hand-crafted tests | reach Polygon *through* `gen_manual` | **NO** (that is the point of `gen_manual`) |
+| `testlib.h` | — | **never** — Polygon provides it |
+| `scores.txt`, `poly_to_cafe.sh`, `verify.py`, `stress.sh` | — | no, local tooling only |
+
+So the only manual uploads are **source files** (generators, solutions, validator); zero test *data* is uploaded by hand, and Polygon's test indices therefore match `scores.txt` 1:1.
+
+**If you deliberately skip `gen_manual`** (not recommended), then the `stK/xx` files *do* become manual tests: add them in Polygon's Tests tab **before** pasting the script, confirm the indices Polygon assigns them, and renumber `scores.txt` to match — the script's `> $` continues after the manual tests, so their positions decide the whole judge order.
+
+### Polygon package → cafe-grader judge data
 
 cafe-grader wants numbered pairs `1.in`/`1.sol`, `2.in`/`2.sol`, …, but a built Polygon package names its tests `tests/01`, `tests/01.a`, … Copy the bundled **`scripts/poly_to_cafe.sh`** into the package and run it — it is problem-independent, needs no editing, and does the whole rename (`.a` → `.sol`, extensionless → `.in`, leading zeros stripped):
 
@@ -654,6 +714,8 @@ For **graph** problems: always include a path graph and a star. If M allows it, 
 - [ ] `gen_manual` reproduces each `stK/xx` file byte-for-byte (asserted, not assumed)
 - [ ] `scores.txt` lists every test in judge order and matches `script.txt` line-for-line; one uniform exact-decimal score, total exactly 100
 - [ ] Expected per-test score of every partial/wa/tle solution computed and verified empirically
+- [ ] Every solution has a Polygon tag derived from its **observed** verdict mix (Step 9.5), not from reading the source; any mixed WA+TLE file is tagged `Incorrect`
+- [ ] Upload map reported to the user: which files are uploaded as sources, and that NO test data is uploaded manually (or, if `gen_manual` was skipped, which `stK/xx` files are manual tests and at which indices)
 - [ ] `poly_to_cafe.sh` copied into the package; `cafe/` built from the Polygon download and diffed against locally generated tests (must be byte-identical)
 - [ ] No two lines in `script.txt` share the same generator+arguments — every repeated call has a distinct trailing seed
 - [ ] `gen_random` clamps m to `max(n-1, atoi(argv[...]))` so seed suffixes never produce an invalid edge count
