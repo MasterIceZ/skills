@@ -25,6 +25,7 @@ The package is still authored, verified, and **uploaded through Polygon** exactl
 | `generators/gen_adversarial.cpp` | Worst-case inputs |
 | `generators/gen_special.cpp` | Structural inputs (algebraic/combinatorial shapes) |
 | `generators/gen_stress.cpp` | Tiny tests for stress testing against brute |
+| `generators/gen_manual.cpp` | Emits each hand-crafted test verbatim, so `script.txt` can list ALL tests |
 | `validator.cpp` | Validates input against the full constraint set (no groups) |
 | `st1/01`, `st1/02`, … | Hand-crafted tests, organized per subtask |
 | `st2/01`, `st2/02`, … | (repeat for each subtask) |
@@ -45,7 +46,7 @@ problem/
 ├── generators/     # every gen_*.cpp
 ├── solutions/      # model + brute + partial ladder + wa_* + tle_*
 ├── validator.cpp   # stays at the package root (own upload slot in Polygon)
-├── st1/ … stK/     # hand-crafted tests per subtask
+├── st1/ … stK/     # hand-crafted tests per subtask (source of truth; embedded in gen_manual)
 ├── script.txt
 └── scores.txt      # test → points manifest (sums to exactly 100)
 ```
@@ -442,26 +443,63 @@ Create a directory per subtask (`st1/`, `st2/`, …). Within each, write 1–2 s
 
 Tests for subtask k must satisfy **all** constraints of subtask k (they will also implicitly satisfy subtasks 1 through k−1).
 
+Keep these files as the human-readable source of truth, then **embed them in `generators/gen_manual.cpp`** (next step) so the script can place them at exact judge positions.
+
 ---
 
 ## Step 12 — Test Script (script.txt)
 
 ### Flat script — no group markers
 
-cafe-grader has no groups, so `script.txt` is a flat list of generator calls with NO `@N` markers. Hand-crafted tests are uploaded first (manual tests), generated ones follow. The TOTAL (manual + generated) must respect the Step 0.5 budget — never more than 50. Choose each generator's single most lethal subtype per subtask.
+cafe-grader has no groups, so `script.txt` is a flat list of generator calls with NO `@N` markers. The TOTAL must respect the Step 0.5 budget exactly. Choose each generator's single most lethal subtype per subtask.
 
-Example matching the 20-test budget above (5 hand-crafted in subtask dirs + 15 generated):
+**Put the hand-crafted tests in the script too.** Polygon scripts cannot reference uploaded manual test files, so write a `generators/gen_manual.cpp` that embeds each `stK/xx` file and prints it verbatim:
+
+```cpp
+// gen_manual.cpp — emits a hand-crafted test verbatim.
+// Usage: gen_manual <subtask> <index>   e.g. gen_manual 1 2  ->  st1/02
+#include "testlib.h"
+#include <bits/stdc++.h>
+using namespace std;
+int main(int argc, char* argv[]) {
+    registerGen(argc, argv, 1);
+    int st = atoi(argv[1]), idx = atoi(argv[2]);
+    map<pair<int, int>, string> tests;
+    tests[{1, 1}] = R"(<contents of st1/01>)";
+    // … one entry per hand-crafted file
+    auto it = tests.find({st, idx});
+    ensuref(it != tests.end(), "no hand-crafted test for subtask %d index %d", st, idx);
+    printf("%s", it->second.c_str());
+    return 0;
+}
+```
+
+Generate this file programmatically from the `stK/` directories rather than retyping the tests, and have the verification step assert that `gen_manual <st> <idx>` reproduces each `stK/xx` **byte-for-byte** so the two can never drift.
+
+Why it matters: with every test in the script, Polygon needs no manual test uploads, its test indices `1..N` line up with `scores.txt` 1:1, and the whole test set is reproducible from source.
+
+Example matching the 20-test budget above (6 hand-crafted via `gen_manual` + 14 generated), grouped by subtask in judge order:
 
 ```
-gen_edge 1 3 > $
+# --- subtask 1 (goal 20) ---
+gen_manual 1 1 > $
+gen_manual 1 2 > $
+gen_edge 1 0 > $
 gen_random 1 1000 1 > $
+# --- subtask 2 (goal 20) ---
+gen_manual 2 1 > $
 gen_edge 2 1 > $
 gen_random 2 100000 1 > $
 gen_adversarial 2 1 > $
+# --- subtask 3 (goal 25) ---
+gen_manual 3 1 > $
 gen_edge 3 3 > $
 gen_random 3 100000 1 > $
 gen_adversarial 3 1 > $
 gen_adversarial 3 2 > $
+# --- subtask 4 (goal 35) ---
+gen_manual 4 1 > $
+gen_manual 4 2 > $
 gen_edge 4 7 > $
 gen_random 4 100000 1 > $
 gen_special 4 3 > $
@@ -469,20 +507,20 @@ gen_adversarial 4 1 > $
 gen_adversarial 4 3 > $
 ```
 
-(That is 14 lines — pair it with 6 hand-crafted tests, or add one more generated killer, so the count lands exactly on the budget.)
+That is exactly 20 lines — 4 + 4 + 5 + 7, matching the goal-derived counts.
 
 ### scores.txt — the score manifest
 
-One line per test **in final judge order** (manual tests first): `test_number  score  source`. `#` starts a comment.
+One line per test **in final judge order**: `test_number  score  source`. `#` starts a comment. The source column must match `script.txt` line-for-line, so a Polygon test index equals the number here.
 
 ```
 # subtask 1 — goal 20 (4 tests x 5)
-1   5  st1/01
-2   5  st1/02
-3   5  gen_edge 1 3
+1   5  gen_manual 1 1
+2   5  gen_manual 1 2
+3   5  gen_edge 1 0
 4   5  gen_random 1 1000 1
 # subtask 2 — goal 20 (4 tests x 5)
-5   5  st2/01
+5   5  gen_manual 2 1
 ...
 # subtask 4 — goal 35 (7 tests x 5)
 ...
@@ -490,11 +528,11 @@ One line per test **in final judge order** (manual tests first): `test_number  s
 # 20 tests x 5 points; goals 20+20+25+35 = 100
 ```
 
-Machine-check before finishing: line count ≤ 50, ALL scores identical, total exactly 100, each subtask's count × score equals its goal.
+Machine-check before finishing: line count ≤ 50, ALL scores identical, total exactly 100, each subtask's count × score equals its goal, and the source column equals `script.txt` line-for-line.
 
 ### Polygon is still the upload target
 
-Upload generators, solutions, validator, manual tests, and the flat script to **Polygon** exactly as in the IOI skill (keep Polygon groups and points OFF) — cafe-grader format is the harness constraint the test plan is designed around, not a direct upload destination. For local verification, materialize the judge data the grader will eventually consume: numbered pairs `1.in`/`1.sol`, `2.in`/`2.sol`, … in judge order (manual tests first inside each subtask block), with each `.sol` produced by the model solution and the uniform per-test score entered in the grader's problem setup.
+Upload generators (including `gen_manual.cpp`), solutions, and the validator to **Polygon** exactly as in the IOI skill, then paste the flat script — keep Polygon's groups and points OFF. Because `gen_manual` carries the hand-crafted tests, there are **no manual test uploads at all** and Polygon's test indices match `scores.txt` 1:1. cafe-grader format is the harness constraint the test plan is designed around, not a direct upload destination. For local verification, materialize the judge data the grader will eventually consume: numbered pairs `1.in`/`1.sol`, `2.in`/`2.sol`, … in judge order, each `.sol` produced by the model solution, with the uniform per-test score entered in the grader's problem setup.
 
 ### Seeding rule
 
@@ -599,8 +637,9 @@ For **graph** problems: always include a path graph and a star. If M allows it, 
 - [ ] `validator.cpp` reads input in exact format; validates the FULL constraint set (no groups)
 - [ ] Hand-crafted tests exist in `stK/` directories for each subtask K
 - [ ] All hand-crafted tests pass the validator
-- [ ] `script.txt` is flat — no `@N` markers; manual + generated test count ≤ 50
-- [ ] `scores.txt` lists every test in judge order; one uniform exact-decimal score, total exactly 100
+- [ ] `script.txt` is flat (no `@N` markers) and lists **every** test — hand-crafted ones via `gen_manual` — so nothing needs a Polygon manual upload; total ≤ 50
+- [ ] `gen_manual` reproduces each `stK/xx` file byte-for-byte (asserted, not assumed)
+- [ ] `scores.txt` lists every test in judge order and matches `script.txt` line-for-line; one uniform exact-decimal score, total exactly 100
 - [ ] Expected per-test score of every partial/wa/tle solution computed and verified empirically
 - [ ] No two lines in `script.txt` share the same generator+arguments — every repeated call has a distinct trailing seed
 - [ ] `gen_random` clamps m to `max(n-1, atoi(argv[...]))` so seed suffixes never produce an invalid edge count
