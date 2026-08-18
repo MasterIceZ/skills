@@ -664,6 +664,22 @@ done
 echo "Subtask 1 solution verified."
 ```
 
+Also assert the script's hand-crafted tests still match their source files — `gen_manual`
+embeds copies, so this is the check that keeps them from drifting:
+
+```bash
+# every gen_manual entry must reproduce its stK/xx file byte-for-byte
+g++ -O2 -std=c++17 -I. -o build/gen_manual generators/gen_manual.cpp
+for f in st*/*; do
+    st=${f%%/*}; st=${st#st}          # st3/02 -> 3
+    idx=$(basename "$f"); idx=$((10#$idx))   # 02 -> 2
+    build/gen_manual "$st" "$idx" > /tmp/gm.txt
+    diff -q /tmp/gm.txt "$f" > /dev/null || echo "DRIFT: gen_manual $st $idx != $f"
+done
+echo "gen_manual matches every hand-crafted file."
+```
+
+
 ---
 
 ## Problem-Type Heuristics

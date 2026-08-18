@@ -17,6 +17,7 @@ IOI problems use **subtask-based partial scoring**: contestants receive points f
 | `generators/gen_adversarial.cpp` | Worst-case inputs |
 | `generators/gen_special.cpp` | Structural inputs (algebraic/combinatorial shapes) |
 | `generators/gen_stress.cpp` | Tiny tests for stress testing against brute |
+| `generators/gen_manual.cpp` | Emits each hand-crafted test verbatim, so `script.txt` can list ALL tests |
 | `validator.cpp` | Validates input; checks per-subtask group constraints |
 | `st1/01`, `st1/02`, … | Hand-crafted tests, organized per subtask |
 | `st2/01`, `st2/02`, … | (repeat for each subtask) |
@@ -432,22 +433,56 @@ Create a directory per subtask (`st1/`, `st2/`, …). Within each, write 2–3 s
 
 Tests for subtask k must satisfy **all** constraints of subtask k (they will also implicitly satisfy subtasks 1 through k−1).
 
+Keep these files as the human-readable source of truth, then **embed them in `generators/gen_manual.cpp`** (next step) so `script.txt` can place them itself. Do NOT plan on uploading them to Polygon as manual tests.
+
 ---
 
 ## Step 12 — Test Script (script.txt)
 
+### The script must include the hand-crafted tests too
+
+**`script.txt` lists EVERY test — hand-crafted ones included.** Polygon scripts cannot reference uploaded manual test files, so write a `generators/gen_manual.cpp` that embeds each `stK/xx` file and prints it verbatim:
+
+```cpp
+// gen_manual.cpp — emits a hand-crafted test verbatim.
+// Usage: gen_manual <subtask> <index>   e.g. gen_manual 1 2  ->  st1/02
+#include "testlib.h"
+#include <bits/stdc++.h>
+using namespace std;
+int main(int argc, char* argv[]) {
+    registerGen(argc, argv, 1);
+    int st = atoi(argv[1]), idx = atoi(argv[2]);
+    map<pair<int, int>, string> tests;
+    tests[{1, 1}] = R"(<contents of st1/01>)";
+    // … one entry per hand-crafted file
+    auto it = tests.find({st, idx});
+    ensuref(it != tests.end(), "no hand-crafted test for subtask %d index %d", st, idx);
+    printf("%s", it->second.c_str());
+    return 0;
+}
+```
+
+Generate this file programmatically from the `stK/` directories rather than retyping the tests, and assert in verification that `gen_manual <st> <idx>` reproduces each `stK/xx` **byte-for-byte** so the two can never drift.
+
+Why this matters more for IOI than anywhere else: a `gen_manual` line sits inside a `@N` block, so the hand-crafted test lands in the right **group automatically**. Uploading it as a manual test instead means assigning its group by hand in Polygon's UI — easy to get wrong, and a hand-crafted test in the wrong group silently changes what that subtask verifies.
+
 ### Group markers
 
-Use `@N` to mark the start of each subtask group. All tests between `@1` and `@2` belong to subtask 1, and so on.
+Use `@N` to mark the start of each subtask group. All tests between `@1` and `@2` belong to subtask 1, and so on. Put each subtask's `gen_manual` lines at the top of its block:
 
 ```
 @1
+gen_manual 1 1 > $
+gen_manual 1 2 > $
+gen_manual 1 3 > $
 gen_edge 1 0 > $
 gen_edge 1 1 > $
 gen_random 1 10 1 > $
 gen_random 1 10 2 > $
 gen_random 1 10 3 > $
 @2
+gen_manual 2 1 > $
+gen_manual 2 2 > $
 gen_edge 2 0 > $
 gen_edge 2 1 > $
 gen_random 2 500 1 > $
@@ -455,6 +490,8 @@ gen_random 2 1000 1 > $
 gen_random 2 1000 2 > $
 gen_adversarial 2 0 > $
 @3
+gen_manual 3 1 > $
+gen_manual 3 2 > $
 gen_edge 3 0 > $
 gen_special 3 0 > $
 gen_special 3 1 > $
@@ -463,6 +500,8 @@ gen_random 3 5000 2 > $
 gen_adversarial 3 0 > $
 gen_adversarial 3 1 > $
 @4
+gen_manual 4 1 > $
+gen_manual 4 2 > $
 gen_edge 4 0 > $
 gen_edge 4 1 > $
 gen_edge 4 2 > $
@@ -530,6 +569,22 @@ done
 echo "Subtask 1 solution verified."
 ```
 
+Also assert the script's hand-crafted tests still match their source files — `gen_manual`
+embeds copies, so this is the check that keeps them from drifting:
+
+```bash
+# every gen_manual entry must reproduce its stK/xx file byte-for-byte
+g++ -O2 -std=c++17 -I. -o build/gen_manual generators/gen_manual.cpp
+for f in st*/*; do
+    st=${f%%/*}; st=${st#st}          # st3/02 -> 3
+    idx=$(basename "$f"); idx=$((10#$idx))   # 02 -> 2
+    build/gen_manual "$st" "$idx" > /tmp/gm.txt
+    diff -q /tmp/gm.txt "$f" > /dev/null || echo "DRIFT: gen_manual $st $idx != $f"
+done
+echo "gen_manual matches every hand-crafted file."
+```
+
+
 ---
 
 ## Problem-Type Heuristics
@@ -585,11 +640,11 @@ Sections, in order:
 2. **Source files (generators)** — UPLOAD each `generators/*.cpp`; `DO NOT UPLOAD testlib.h`, Polygon provides it.
 3. **Validator** — UPLOAD `validator.cpp` and set it as the validator.
 4. **Solutions** — one row per file: `UPLOAD this file | Set solution type to | Verified behavior`, using the Step 9.5 tags; call out any `Incorrect` (mixed) row and why a pure tag would be rejected.
-5. **Tests** — UPLOAD each `stK/xx` hand-crafted file as a manual test **and state which group each belongs to**, then PASTE `script.txt` (whose `@N` markers assign the generated tests to groups), then mark the sample test.
+5. **Tests** — state plainly: **do NOT add any manual test**; every test comes from the script, hand-crafted ones via `gen_manual`. PASTE `script.txt` (whose `@N` markers assign each test, including the `gen_manual` ones, to its group), then mark the sample test and state the exact test count Polygon must show.
 6. **Groups and points** — enable groups, set each group's points from the subtask table, set the group dependencies and the per-group "all tests" requirement.
 7. **Never uploaded anywhere** — closing table: `testlib.h`, local tooling, and working directories.
 
-Unlike the cafe variant, IOI packages DO upload test data by hand: the `stK/` files are real manual tests, so `UPLOAD.md` must list each one with its target group and confirm the resulting test indices before the script's tests are appended.
+The only things uploaded to Polygon by hand are **source files** (generators, solutions, validator). No test *data* is uploaded manually — because `gen_manual` lines live inside the `@N` blocks, group assignment comes from the script rather than from clicking through Polygon's UI.
 
 ---
 
@@ -601,7 +656,8 @@ Unlike the cafe variant, IOI packages DO upload test data by hand: the `stK/` fi
 - [ ] `validator.cpp` reads input in exact format; checks per-group constraints
 - [ ] Hand-crafted tests exist in `stK/` directories for each subtask K
 - [ ] All hand-crafted tests pass the validator
-- [ ] `script.txt` uses `@N` group markers and references all generators
+- [ ] `script.txt` uses `@N` group markers and lists **every** test — hand-crafted ones via `gen_manual`, placed inside their subtask's block so grouping is automatic; nothing is uploaded as a Polygon manual test
+- [ ] `gen_manual` reproduces each `stK/xx` file byte-for-byte (asserted, not assumed)
 - [ ] No two lines in `script.txt` share the same generator+arguments — every repeated call has a distinct trailing seed
 - [ ] `gen_random` clamps m to `max(n-1, atoi(argv[...]))` so seed suffixes never produce an invalid edge count
 - [ ] `gen_special` subtypes each encode a distinct structural shape
@@ -613,7 +669,7 @@ Unlike the cafe variant, IOI packages DO upload test data by hand: the `stK/` fi
 - [ ] 3–4 `wa_*.cpp` files with "Fails on:" and "To expose:" comment headers
 - [ ] 1–2 `tle_*.cpp` files with "TLEs on:" header
 - [ ] Every solution has a Polygon tag derived from its **observed** verdict mix (Step 9.5), not from reading the source; any mixed WA+TLE file is tagged `Incorrect`
-- [ ] `UPLOAD.md` written with REAL file names and tags, explicit UPLOAD / PASTE / DO NOT UPLOAD actions, and each `stK/xx` manual test mapped to its group
+- [ ] `UPLOAD.md` written with REAL file names and tags, explicit UPLOAD / PASTE / DO NOT UPLOAD actions, and a statement that NO test data is uploaded by hand
 - [ ] Graph/tree generators: edges shuffled or reverse-topological — never bare sequential
 - [ ] Every adversarial/special generator guarantees reachability or is intentionally testing the -1 case
 - [ ] Constraints in all generators match the subtask table exactly
