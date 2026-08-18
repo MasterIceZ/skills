@@ -12,21 +12,34 @@ IOI problems use **subtask-based partial scoring**: contestants receive points f
 
 | File | Purpose |
 |------|---------|
-| `gen_edge.cpp` | Edge/corner cases, subtask-aware |
-| `gen_random.cpp` | Random tests, subtask-aware |
-| `gen_adversarial.cpp` | Worst-case inputs |
-| `gen_special.cpp` | Structural inputs (algebraic/combinatorial shapes) |
-| `gen_stress.cpp` | Tiny tests for stress testing against brute |
+| `generators/gen_edge.cpp` | Edge/corner cases, subtask-aware |
+| `generators/gen_random.cpp` | Random tests, subtask-aware |
+| `generators/gen_adversarial.cpp` | Worst-case inputs |
+| `generators/gen_special.cpp` | Structural inputs (algebraic/combinatorial shapes) |
+| `generators/gen_stress.cpp` | Tiny tests for stress testing against brute |
 | `validator.cpp` | Validates input; checks per-subtask group constraints |
 | `st1/01`, `st1/02`, … | Hand-crafted tests, organized per subtask |
 | `st2/01`, `st2/02`, … | (repeat for each subtask) |
 | `script.txt` | Test script with `@N` group markers |
-| `brute.cpp` | Correct but slow (handles all small subtasks) |
-| `sol_st1.cpp` | Passes **only** subtask 1 |
-| `sol_st1_2.cpp` | Passes subtasks 1–2 |
-| `sol_st1_2_3.cpp` | Passes subtasks 1–3 (if ≥4 subtasks exist) |
-| `wa_*.cpp` | Wrong-answer solutions (3–4 distinct failure modes) |
-| `tle_*.cpp` | Correct-logic but TLE solutions (1–2 files) |
+| `solutions/sol.cpp` | Model solution (full score) — fix/confirm the provided one |
+| `solutions/brute.cpp` | Correct but slow (handles all small subtasks) |
+| `solutions/sol_st1.cpp` | Passes **only** subtask 1 |
+| `solutions/sol_st1_2.cpp` | Passes subtasks 1–2 |
+| `solutions/sol_st1_2_3.cpp` | Passes subtasks 1–3 (if ≥4 subtasks exist) |
+| `solutions/wa_*.cpp` | Wrong-answer solutions (3–4 distinct failure modes) |
+| `solutions/tle_*.cpp` | Correct-logic but TLE solutions (1–2 files) |
+
+**Directory layout** — keep generators and solutions in their own directories so each set can be bulk-uploaded to Polygon in one go:
+
+```
+problem/
+├── generators/     # every gen_*.cpp
+├── solutions/      # model + brute + partial ladder + wa_* + tle_*
+├── validator.cpp   # stays at the package root (own upload slot in Polygon)
+├── st1/ … stK/     # hand-crafted tests per subtask
+└── script.txt
+```
+Compiled binaries and generated tests go in a local `build/` directory — never mixed into the source dirs. In `script.txt`, reference generators by bare name (`gen_edge …`), not by path — Polygon resolves uploaded generators by name.
 
 `testlib.h` is pre-available in Polygon — do not upload it. For local testing:
 `https://raw.githubusercontent.com/MikeMirzayanov/testlib/refs/heads/master/testlib.h`
@@ -89,7 +102,7 @@ If no brute force is provided, write one (see Step 8).
 
 ---
 
-## Step 3 — Write gen_edge.cpp
+## Step 3 — Write generators/gen_edge.cpp
 
 Generates deterministic edge and corner cases. Takes `subtask` and `subtype` arguments.
 
@@ -124,7 +137,7 @@ The `st` argument controls which subtask's N limit is used — `gen_edge 1 0` pr
 
 ---
 
-## Step 4 — Write gen_random.cpp
+## Step 4 — Write generators/gen_random.cpp
 
 Generates random tests within a subtask's constraint range. Takes `subtask`, `n` (optional), and a seed.
 
@@ -155,7 +168,7 @@ To get distinct tests at the same subtask+size, append a different trailing inte
 
 ---
 
-## Step 5 — Write gen_special.cpp
+## Step 5 — Write generators/gen_special.cpp
 
 Generates structural inputs with mathematical shapes. Takes `subtask` and `subtype`.
 
@@ -187,7 +200,7 @@ Aim for 4–6 subtypes per generator. For maximum-constraint subtasks (the final
 
 ---
 
-## Step 6 — Write gen_stress.cpp
+## Step 6 — Write generators/gen_stress.cpp
 
 Tiny tests for stress testing against `brute.cpp`. Capped well below even subtask 1's limit.
 
@@ -212,7 +225,7 @@ int main(int argc, char* argv[]) {
 
 ---
 
-## Step 7 — Write gen_adversarial.cpp
+## Step 7 — Write generators/gen_adversarial.cpp
 
 Worst-case inputs designed to break naive solutions. Takes `subtask` and `subtype`.
 
@@ -248,7 +261,7 @@ int main(int argc, char* argv[]) {
 
 This is the most IOI-specific part. Write one solution per subtask boundary — each one passes all subtasks up to k but is **intentionally too slow or wrong** for subtask k+1.
 
-### brute.cpp — Subtask 1 boundary
+### solutions/brute.cpp — Subtask 1 boundary
 
 Simple, obviously-correct, slow solution. Should pass subtask 1 (and maybe 2) but TLE on higher subtasks.
 
@@ -263,7 +276,7 @@ int main() {
 }
 ```
 
-### sol_st1.cpp — Passes only subtask 1
+### solutions/sol_st1.cpp — Passes only subtask 1
 
 A solution whose algorithm is correct for the small constraints of subtask 1 but is too slow or has a missing case for larger inputs. Typical: O(N^k) with large k, or a special-case solution that only handles the structural constraint of subtask 1.
 
@@ -276,7 +289,7 @@ using namespace std;
 int main() { /* ... */ }
 ```
 
-### sol_st1_2.cpp — Passes subtasks 1–2
+### solutions/sol_st1_2.cpp — Passes subtasks 1–2
 
 Passes up through subtask 2 (e.g., N ≤ 1 000) but not further. Usually an O(N²) algorithm.
 
@@ -289,7 +302,7 @@ using namespace std;
 int main() { /* ... */ }
 ```
 
-### sol_st1_2_3.cpp — Passes subtasks 1–3 (if ≥4 subtasks)
+### solutions/sol_st1_2_3.cpp — Passes subtasks 1–3 (if ≥4 subtasks)
 
 Only needed when there are 4+ subtasks. This solution is the "good but not full" contestant submission.
 
@@ -317,7 +330,7 @@ If the problem has structural subtasks (e.g., "tree is a path"), write the speci
 
 ## Step 9 — Write Wrong/TLE Solutions
 
-### wa_*.cpp — Wrong Answer Solutions (3–4 files)
+### solutions/wa_*.cpp — Wrong Answer Solutions (3–4 files)
 
 Each implements a *distinct* common wrong approach. Cover different failure modes.
 
@@ -332,7 +345,7 @@ int main() { /* ... */ }
 
 Good wrong approaches: greedy without lookahead, DP with wrong base case, mishandled edge cases, overflow with int instead of long long, off-by-one in binary search.
 
-### tle_*.cpp — TLE Solutions (1–2 files)
+### solutions/tle_*.cpp — TLE Solutions (1–2 files)
 
 Correct logic but too-high complexity. Model realistic contestant mistakes.
 
@@ -348,6 +361,8 @@ int main() { /* ... */ }
 ---
 
 ## Step 10 — Write validator.cpp
+
+The validator lives at the package root, not in `generators/` — Polygon uploads it in its own slot.
 
 ```cpp
 #include "testlib.h"
@@ -458,14 +473,15 @@ Generators that never call `rnd` are immune — call each subtype only once.
 ## Step 13 — Local Stress Test Script
 
 ```bash
-g++ -O2 -std=c++17 -o gen_stress   gen_stress.cpp
-g++ -O2 -std=c++17 -o sol          solution.cpp     # full correct solution
-g++ -O2 -std=c++17 -o brute        brute.cpp
+mkdir -p build
+g++ -O2 -std=c++17 -I. -o build/gen_stress generators/gen_stress.cpp
+g++ -O2 -std=c++17 -o build/sol   solutions/sol.cpp    # full correct solution
+g++ -O2 -std=c++17 -o build/brute solutions/brute.cpp
 
 for i in $(seq 1 1000); do
-    ./gen_stress > test.in
-    ./sol   < test.in > out_sol.txt
-    ./brute < test.in > out_brute.txt
+    build/gen_stress "$i" > test.in   # pass $i: testlib seeds from argv, no args = same test forever
+    build/sol   < test.in > out_sol.txt
+    build/brute < test.in > out_brute.txt
     if ! diff -q out_sol.txt out_brute.txt > /dev/null 2>&1; then
         echo "DIFFERENCE on iteration $i"
         cat test.in
@@ -481,10 +497,10 @@ Also include a subtask validation check:
 
 ```bash
 # Verify subtask solutions pass their expected subtasks
-g++ -O2 -std=c++17 -o sol_st1   sol_st1.cpp
-for f in st1/*.in; do
-    ./sol_st1 < "$f" > /tmp/out.txt
-    ./sol     < "$f" > /tmp/ref.txt
+g++ -O2 -std=c++17 -o build/sol_st1 solutions/sol_st1.cpp
+for f in st1/*; do
+    build/sol_st1 < "$f" > /tmp/out.txt
+    build/sol     < "$f" > /tmp/ref.txt
     diff /tmp/out.txt /tmp/ref.txt || echo "FAIL: $f"
 done
 echo "Subtask 1 solution verified."
@@ -538,7 +554,8 @@ For **graph** problems: always include a path graph and a star. If M allows it, 
 ## Final Checklist
 
 - [ ] Subtask table written and shown to user (with added intermediate subtasks if original had fewer than 4)
-- [ ] All generator files compile: `g++ -O2 gen_edge.cpp -o gen_edge` etc.
+- [ ] Generators in `generators/`, all solutions in `solutions/`, `validator.cpp` at the root
+- [ ] All generator files compile: `g++ -O2 -I. generators/gen_edge.cpp -o build/gen_edge` etc.
 - [ ] `validator.cpp` reads input in exact format; checks per-group constraints
 - [ ] Hand-crafted tests exist in `stK/` directories for each subtask K
 - [ ] All hand-crafted tests pass the validator
@@ -547,10 +564,10 @@ For **graph** problems: always include a path graph and a star. If M allows it, 
 - [ ] `gen_random` clamps m to `max(n-1, atoi(argv[...]))` so seed suffixes never produce an invalid edge count
 - [ ] `gen_special` subtypes each encode a distinct structural shape
 - [ ] `gen_stress` caps N well below subtask 1's limit for fast brute runs
-- [ ] `brute.cpp` gives correct output; passes subtask 1 (and maybe 2)
-- [ ] `sol_st1.cpp` exists and passes ONLY subtask 1; comment explains why it fails subtask 2+
-- [ ] `sol_st1_2.cpp` exists and passes ONLY subtasks 1–2; comment explains failure mode
-- [ ] `sol_st1_2_3.cpp` exists if ≥4 subtasks; comment explains failure mode
+- [ ] `solutions/brute.cpp` gives correct output; passes subtask 1 (and maybe 2)
+- [ ] `solutions/sol_st1.cpp` exists and passes ONLY subtask 1; comment explains why it fails subtask 2+
+- [ ] `solutions/sol_st1_2.cpp` exists and passes ONLY subtasks 1–2; comment explains failure mode
+- [ ] `solutions/sol_st1_2_3.cpp` exists if ≥4 subtasks; comment explains failure mode
 - [ ] 3–4 `wa_*.cpp` files with "Fails on:" and "To expose:" comment headers
 - [ ] 1–2 `tle_*.cpp` files with "TLEs on:" header
 - [ ] Graph/tree generators: edges shuffled or reverse-topological — never bare sequential
