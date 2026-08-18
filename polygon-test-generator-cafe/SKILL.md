@@ -31,6 +31,7 @@ The package is still authored, verified, and **uploaded through Polygon** exactl
 | `st2/01`, `st2/02`, … | (repeat for each subtask) |
 | `script.txt` | Flat test script — no group markers |
 | `scores.txt` | Per-test score manifest — exact decimals, sums to exactly 100 |
+| `poly_to_cafe.sh` | Converts the downloaded Polygon package into cafe-grader judge data (copy from `scripts/`) |
 | `solutions/sol.cpp` | Model solution (full score) — fix/confirm the provided one |
 | `solutions/brute.cpp` | Correct but slow (handles all small subtasks) |
 | `solutions/sol_st1.cpp` | Passes **only** subtask 1 |
@@ -48,7 +49,8 @@ problem/
 ├── validator.cpp   # stays at the package root (own upload slot in Polygon)
 ├── st1/ … stK/     # hand-crafted tests per subtask (source of truth; embedded in gen_manual)
 ├── script.txt
-└── scores.txt      # test → points manifest (sums to exactly 100)
+├── scores.txt      # test → points manifest (sums to exactly 100)
+└── poly_to_cafe.sh # poly/tests -> cafe/N.in + N.sol (bundled, copy as-is)
 ```
 Compiled binaries and generated tests go in a local `build/` directory — never mixed into the source dirs. In `script.txt`, reference generators by bare name (`gen_edge …`), not by path — Polygon resolves uploaded generators by name.
 
@@ -532,7 +534,18 @@ Machine-check before finishing: line count ≤ 50, ALL scores identical, total e
 
 ### Polygon is still the upload target
 
-Upload generators (including `gen_manual.cpp`), solutions, and the validator to **Polygon** exactly as in the IOI skill, then paste the flat script — keep Polygon's groups and points OFF. Because `gen_manual` carries the hand-crafted tests, there are **no manual test uploads at all** and Polygon's test indices match `scores.txt` 1:1. cafe-grader format is the harness constraint the test plan is designed around, not a direct upload destination. For local verification, materialize the judge data the grader will eventually consume: numbered pairs `1.in`/`1.sol`, `2.in`/`2.sol`, … in judge order, each `.sol` produced by the model solution, with the uniform per-test score entered in the grader's problem setup.
+Upload generators (including `gen_manual.cpp`), solutions, and the validator to **Polygon** exactly as in the IOI skill, then paste the flat script — keep Polygon's groups and points OFF. Because `gen_manual` carries the hand-crafted tests, there are **no manual test uploads at all** and Polygon's test indices match `scores.txt` 1:1. cafe-grader format is the harness constraint the test plan is designed around, not a direct upload destination. ### Polygon package → cafe-grader judge data
+
+cafe-grader wants numbered pairs `1.in`/`1.sol`, `2.in`/`2.sol`, …, but a built Polygon package names its tests `tests/01`, `tests/01.a`, … Copy the bundled **`scripts/poly_to_cafe.sh`** into the package and run it — it is problem-independent, needs no editing, and does the whole rename (`.a` → `.sol`, extensionless → `.in`, leading zeros stripped):
+
+```bash
+./poly_to_cafe.sh                # poly/tests -> cafe/
+diff -rq cafe <(local export)    # optional: confirm Polygon's build == local generation
+```
+
+It refuses to run on filenames it does not recognise, checks the result is a gapless `1..N` with both halves per test, and — when `scores.txt` sits alongside — asserts the built test count equals the manifest count, so a short Polygon build cannot silently break the 100-point total.
+
+Also materialize the same pairs locally from your own generators and `diff` the two directories: byte-identical output proves the Polygon build reproduces the intended test data. Then enter the uniform per-test score in the grader's problem setup.
 
 ### Seeding rule
 
@@ -641,6 +654,7 @@ For **graph** problems: always include a path graph and a star. If M allows it, 
 - [ ] `gen_manual` reproduces each `stK/xx` file byte-for-byte (asserted, not assumed)
 - [ ] `scores.txt` lists every test in judge order and matches `script.txt` line-for-line; one uniform exact-decimal score, total exactly 100
 - [ ] Expected per-test score of every partial/wa/tle solution computed and verified empirically
+- [ ] `poly_to_cafe.sh` copied into the package; `cafe/` built from the Polygon download and diffed against locally generated tests (must be byte-identical)
 - [ ] No two lines in `script.txt` share the same generator+arguments — every repeated call has a distinct trailing seed
 - [ ] `gen_random` clamps m to `max(n-1, atoi(argv[...]))` so seed suffixes never produce an invalid edge count
 - [ ] `gen_special` subtypes each encode a distinct structural shape
