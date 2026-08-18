@@ -1,6 +1,6 @@
 ---
 name: polygon-test-generator-cafe
-description: Generate cafe-grader-style test data (per-test scoring, NO groups) from a competitive programming problem statement and solutions. Like polygon-test-generator-ioi but scoring is per test: subtasks remain as SCORE GOALS (e.g., subtask 1 = 20 pts, subtask 2 = 30 pts, … summing to exactly 100) whose points are split across that subtask's individual tests; at most 50 tests ALWAYS; every per-test score an exact decimal (4, 5, 2.5 — never 100/3 = 0.333…). Produces testlib.h-based generators, a full-constraint validator, hand-crafted tests per subtask, subtask-specific partial solutions (sol_st1.cpp, …), wrong/TLE solutions, a flat test script, and a scores.txt manifest. Always use this skill when the user wants tests for cafe-grader ("cafe", "cafe-grader", "grader.in.th") or any judge with per-test scores and no subtask grouping.
+description: Generate cafe-grader-style test data (per-test scoring, NO groups) from a competitive programming problem statement and solutions. Like polygon-test-generator-ioi but scoring is per test and UNIFORM — cafe-grader gives every test the SAME score, so the test count must divide 100 cleanly (20 tests x 5, 25 x 4, 10 x 10 — never 30 x 3.33…); at most 50 tests ALWAYS; subtasks remain as SCORE GOALS (each a multiple of the uniform score, summing to exactly 100) met by test COUNT. Everything is still authored and uploaded via Polygon — cafe-grader format is the harness constraint, not a direct upload target. Produces testlib.h-based generators, a full-constraint validator, hand-crafted tests per subtask, subtask-specific partial solutions (sol_st1.cpp, …), wrong/TLE solutions, a flat test script, and a scores.txt manifest. Always use this skill when the user wants tests for cafe-grader ("cafe", "cafe-grader", "grader.in.th") or any judge with per-test scores and no subtask grouping.
 ---
 
 # Cafe-Grader Test Generator
@@ -8,11 +8,13 @@ description: Generate cafe-grader-style test data (per-test scoring, NO groups) 
 Generate test data for cafe-grader from a problem statement (Markdown or LaTeX) and provided solutions.
 cafe-grader scores **every test file individually** — there are no subtask groups and no all-or-nothing group scoring. Three hard rules drive everything below:
 
-1. **Never more than 50 tests** (hand-crafted + generated combined). Aim for 20–40.
+1. **Never more than 50 tests** (hand-crafted + generated combined).
 2. **The full score is exactly 100.**
-3. **Every per-test score is an exact decimal** — integers or clean halves like 2.5, never a repeating decimal (100/3 = 0.333… is forbidden). Prefer integers.
+3. **Every test is worth the SAME score** — cafe-grader supports uniform per-test scoring only, and the score must be an exact decimal. So the test count must divide 100 cleanly: 10, 20, 25, or 50 tests (→ 10, 5, 4, 2 points each), or 40 tests (→ 2.5) only if half points are acceptable. A count like 30 (100/30 = 3.33…) is forbidden.
 
-**Subtasks still exist — as score goals.** Define subtasks exactly as in the IOI skill and give each one a score goal (e.g., subtask 1 = 20 points, subtask 2 = 30, …) with the goals summing to exactly 100. The statement shows these goals like any IOI problem; only the grader differs: a subtask's goal is split across its individual tests, and a contestant simply earns the points of every test they pass — no group all-or-nothing rule.
+The package is still authored, verified, and **uploaded through Polygon** exactly like the IOI skill — cafe-grader format is the harness constraint the test plan is designed around, not a direct upload destination.
+
+**Subtasks still exist — as score goals.** Define subtasks exactly as in the IOI skill and give each one a score goal (e.g., subtask 1 = 20 points, subtask 2 = 30, …) with the goals summing to exactly 100. The statement shows these goals like any IOI problem; only the grader differs: every goal must be a **multiple of the uniform per-test score**, the subtask's goal is met by test COUNT (goal ÷ score tests), and a contestant simply earns the points of every test they pass — no group all-or-nothing rule.
 
 ## What You Produce
 
@@ -86,24 +88,24 @@ Aim for 3–5 subtasks. If the statement gives fewer (or none), **add intermedia
 
 Before writing any generator, decide the exact test count and every test's score. Hard rules, no exceptions:
 
-- **Total tests ≤ 50** (hand-crafted + generated combined). Target 20–40.
+- **Total tests ≤ 50** (hand-crafted + generated combined).
 - **Scores sum to exactly 100.**
-- **Every score is an exact decimal.** Prefer integers; halves (2.5) are acceptable; anything repeating is not.
+- **All tests carry the SAME score** (uniform — the only mode cafe-grader supports), an exact decimal: pick the test count from {10, 20, 25, 50} → {10, 5, 4, 2} points, or 40 → 2.5 only if half points are acceptable.
 
 Budget in two stages:
 
-1. **Give each subtask a score goal** — integers summing to exactly 100 (e.g., 20 / 20 / 25 / 35, or 20 / 30 / 50). These goals appear in the statement ("Subtask 1 (20 points): …") exactly like an IOI problem.
-2. **Split each goal across that subtask's tests.** Pick the test count so every per-test score stays an exact decimal: uniform `goal / count` (20 pts → 4, 5, 8, or 10 tests; 25 pts → 5 or 10 tests) or a non-uniform integer split (30 = 4+4+4+4+4+5+5). The per-test scores of a subtask must sum exactly to its goal.
+1. **Pick the uniform per-test score s** (and thus the total test count 100 / s). 20 tests × 5 points is the sweet spot; 25 × 4 gives finer granularity, 10 × 10 coarser.
+2. **Give each subtask a score goal that is a multiple of s**, goals summing to exactly 100 (with s = 5: 20 / 20 / 25 / 35 ✓; 20 / 30 / 50 ✓). The goals appear in the statement ("Subtask 1 (20 points): …") exactly like an IOI problem, and each subtask simply gets goal / s tests.
 
-Example, 4 subtasks with goals 20 / 20 / 25 / 35:
+Example, s = 5 (20 tests), 4 subtasks with goals 20 / 20 / 25 / 35:
 
-| Subtask | Tests | Points each | Subtotal |
-|------|-------|-------------|----------|
-| 1 | 5 | 4 | 20 |
-| 2 | 5 | 4 | 20 |
-| 3 | 5 | 5 | 25 |
-| 4 | 7 | 5 | 35 |
-| **Total** | **22** | | **100** |
+| Subtask | Goal | Tests (goal / 5) |
+|---------|------|------------------|
+| 1 | 20 | 4 |
+| 2 | 20 | 4 |
+| 3 | 25 | 5 |
+| 4 | 35 | 7 |
+| **Total** | **100** | **20** |
 
 Per-test scoring has NO group all-or-nothing effect — a wrong solution keeps the points of every individual test it sneaks past. Therefore:
 
@@ -448,53 +450,51 @@ Tests for subtask k must satisfy **all** constraints of subtask k (they will als
 
 cafe-grader has no groups, so `script.txt` is a flat list of generator calls with NO `@N` markers. Hand-crafted tests are uploaded first (manual tests), generated ones follow. The TOTAL (manual + generated) must respect the Step 0.5 budget — never more than 50. Choose each generator's single most lethal subtype per subtask.
 
-Example matching the 22-test budget above (5 hand-crafted in subtask dirs + 17 generated):
+Example matching the 20-test budget above (5 hand-crafted in subtask dirs + 15 generated):
 
 ```
-gen_edge 1 0 > $
 gen_edge 1 3 > $
 gen_random 1 1000 1 > $
-gen_adversarial 1 1 > $
+gen_edge 2 1 > $
 gen_random 2 100000 1 > $
-gen_special 2 2 > $
-gen_adversarial 2 0 > $
+gen_adversarial 2 1 > $
 gen_edge 3 3 > $
 gen_random 3 100000 1 > $
-gen_special 3 0 > $
 gen_adversarial 3 1 > $
 gen_adversarial 3 2 > $
-gen_edge 4 2 > $
+gen_edge 4 7 > $
 gen_random 4 100000 1 > $
-gen_random 4 100000 2 > $
 gen_special 4 3 > $
+gen_adversarial 4 1 > $
 gen_adversarial 4 3 > $
 ```
+
+(That is 14 lines — pair it with 6 hand-crafted tests, or add one more generated killer, so the count lands exactly on the budget.)
 
 ### scores.txt — the score manifest
 
 One line per test **in final judge order** (manual tests first): `test_number  score  source`. `#` starts a comment.
 
 ```
-# subtask 1 — goal 20 (5 tests x 4)
-1   4  st1/01
-2   4  st1/02
-3   4  gen_edge 1 0
-4   4  gen_edge 1 3
-5   4  gen_random 1 1000 1
-# subtask 2 — goal 20 (5 tests x 4)
-6   4  st2/01
+# subtask 1 — goal 20 (4 tests x 5)
+1   5  st1/01
+2   5  st1/02
+3   5  gen_edge 1 3
+4   5  gen_random 1 1000 1
+# subtask 2 — goal 20 (4 tests x 5)
+5   5  st2/01
 ...
 # subtask 4 — goal 35 (7 tests x 5)
 ...
-22  5  gen_adversarial 4 3
-# 22 tests; goals 20+20+25+35 = 100
+20  5  gen_adversarial 4 3
+# 20 tests x 5 points; goals 20+20+25+35 = 100
 ```
 
-Machine-check before finishing: line count ≤ 50, scores sum to exactly 100, every score an exact decimal.
+Machine-check before finishing: line count ≤ 50, ALL scores identical, total exactly 100, each subtask's count × score equals its goal.
 
-### Exporting for cafe-grader
+### Polygon is still the upload target
 
-cafe-grader consumes numbered pairs `1.in`/`1.sol`, `2.in`/`2.sol`, … Materialize inputs locally in judge order (manual tests first, then script lines), produce each `.sol` with the model solution, and enter the per-test scores from `scores.txt` in the grader's problem configuration.
+Upload generators, solutions, validator, manual tests, and the flat script to **Polygon** exactly as in the IOI skill (keep Polygon groups and points OFF) — cafe-grader format is the harness constraint the test plan is designed around, not a direct upload destination. For local verification, materialize the judge data the grader will eventually consume: numbered pairs `1.in`/`1.sol`, `2.in`/`2.sol`, … in judge order (manual tests first inside each subtask block), with each `.sol` produced by the model solution and the uniform per-test score entered in the grader's problem setup.
 
 ### Seeding rule
 
@@ -592,15 +592,15 @@ For **graph** problems: always include a path graph and a star. If M allows it, 
 
 ## Final Checklist
 
-- [ ] Subtask table with per-subtask score goals shown to user (goals sum to exactly 100; ≤ 50 tests total)
-- [ ] Per-test scores inside each subtask sum exactly to that subtask's goal, every one an exact decimal
+- [ ] Subtask table with score goals shown to user (goals sum to exactly 100, each a multiple of the uniform per-test score; ≤ 50 tests total)
+- [ ] All tests carry the SAME score (uniform); each subtask's test count × score equals its goal
 - [ ] Generators in `generators/`, all solutions in `solutions/`, `validator.cpp` at the root
 - [ ] All generator files compile: `g++ -O2 -I. generators/gen_edge.cpp -o build/gen_edge` etc.
 - [ ] `validator.cpp` reads input in exact format; validates the FULL constraint set (no groups)
 - [ ] Hand-crafted tests exist in `stK/` directories for each subtask K
 - [ ] All hand-crafted tests pass the validator
 - [ ] `script.txt` is flat — no `@N` markers; manual + generated test count ≤ 50
-- [ ] `scores.txt` lists every test in judge order; scores are exact decimals summing to exactly 100
+- [ ] `scores.txt` lists every test in judge order; one uniform exact-decimal score, total exactly 100
 - [ ] Expected per-test score of every partial/wa/tle solution computed and verified empirically
 - [ ] No two lines in `script.txt` share the same generator+arguments — every repeated call has a distinct trailing seed
 - [ ] `gen_random` clamps m to `max(n-1, atoi(argv[...]))` so seed suffixes never produce an invalid edge count
