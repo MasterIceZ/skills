@@ -32,6 +32,7 @@ The package is still authored, verified, and **uploaded through Polygon** exactl
 | `script.txt` | Flat test script — no group markers |
 | `scores.txt` | Per-test score manifest — exact decimals, sums to exactly 100 |
 | `poly_to_cafe.sh` | Converts the downloaded Polygon package into cafe-grader judge data (copy from `scripts/`) |
+| `UPLOAD.md` | Click-through upload checklist — every file, where it goes, which tag, what is never uploaded |
 | `solutions/sol.cpp` | Model solution (full score) — fix/confirm the provided one |
 | `solutions/brute.cpp` | Correct but slow (handles all small subtasks) |
 | `solutions/sol_st1.cpp` | Passes **only** subtask 1 |
@@ -50,7 +51,8 @@ problem/
 ├── st1/ … stK/     # hand-crafted tests per subtask (source of truth; embedded in gen_manual)
 ├── script.txt
 ├── scores.txt      # test → points manifest (sums to exactly 100)
-└── poly_to_cafe.sh # poly/tests -> cafe/N.in + N.sol (bundled, copy as-is)
+├── poly_to_cafe.sh # poly/tests -> cafe/N.in + N.sol (bundled, copy as-is)
+└── UPLOAD.md       # the upload checklist you hand the user
 ```
 Compiled binaries and generated tests go in a local `build/` directory — never mixed into the source dirs. In `script.txt`, reference generators by bare name (`gen_edge …`), not by path — Polygon resolves uploaded generators by name.
 
@@ -577,22 +579,28 @@ Machine-check before finishing: line count ≤ 50, ALL scores identical, total e
 
 Upload to **Polygon** exactly as in the IOI skill, then paste the flat script — keep Polygon's groups and points OFF. cafe-grader format is the harness constraint the test plan is designed around, not a direct upload destination.
 
-**Upload map — what goes where, and what is NOT uploaded:**
+### Write UPLOAD.md — the explicit click-through checklist
 
-| Item | Where it goes in Polygon | Manual upload? |
-|------|--------------------------|----------------|
-| `generators/*.cpp` (incl. `gen_manual.cpp`) | Files → Generators | yes, as source files |
-| `solutions/*.cpp` | Solutions, each with its **Step 9.5 tag** | yes, as source files |
-| `validator.cpp` | Validator slot | yes, as a source file |
-| `script.txt` | Tests → script | paste its contents |
-| **The tests themselves** | produced by the script | **NO — none are manual tests** |
-| `stK/xx` hand-crafted tests | reach Polygon *through* `gen_manual` | **NO** (that is the point of `gen_manual`) |
-| `testlib.h` | — | **never** — Polygon provides it |
-| `scores.txt`, `poly_to_cafe.sh`, `verify.py`, `stress.sh` | — | no, local tooling only |
+Prose about "upload the generators" is not enough: **produce an `UPLOAD.md`** that names every file, says whether to UPLOAD it from disk or PASTE it, and states the exact Polygon setting. Write it the way `script.txt` reads — mechanical, one action per line, no interpretation needed. Use these conventions:
 
-So the only manual uploads are **source files** (generators, solutions, validator); zero test *data* is uploaded by hand, and Polygon's test indices therefore match `scores.txt` 1:1.
+- `UPLOAD` = pick this file from disk · `PASTE` = paste text into a field · `DO NOT UPLOAD` = keep local
+- Checkboxes (`- [ ]`) so the user can work down the list
+- Fill in the REAL file names and REAL verified tags for this problem — never leave placeholders
 
-**If you deliberately skip `gen_manual`** (not recommended), then the `stK/xx` files *do* become manual tests: add them in Polygon's Tests tab **before** pasting the script, confirm the indices Polygon assigns them, and renumber `scores.txt` to match — the script's `> $` continues after the manual tests, so their positions decide the whole judge order.
+Required sections, in order:
+
+1. **General info** — time limit, memory limit, checker (name the standard one, or the custom checker file), and "test groups/points: leave OFF" since scoring lives in cafe-grader.
+2. **Source files (generators)** — UPLOAD every `generators/*.cpp`, with `gen_manual.cpp` first and a note on what it carries. State `DO NOT UPLOAD testlib.h — Polygon provides it`.
+3. **Validator** — UPLOAD `validator.cpp` and set it as the validator.
+4. **Solutions** — a table with one row per file: `UPLOAD this file | Set solution type to | Verified behavior`, using the Step 9.5 tags. Call out any `Incorrect` row and why a pure tag would be rejected.
+5. **Tests** — state plainly: **do NOT add any manual test**, all tests come from the script, then PASTE `script.txt`, mark the sample test, and run Polygon's solution check. State the exact test count Polygon must end up showing.
+6. **Build, download, convert** — build and download the package, unzip so tests land in `poly/tests/`, run `./poly_to_cafe.sh`, and `diff` against a local export to prove Polygon built what was designed.
+7. **cafe-grader** — UPLOAD the `cafe/` pairs, set the test count, the uniform per-test score, and the time limit.
+8. **Never uploaded anywhere** — a closing table: `testlib.h`, the `stK/` files (they live inside `gen_manual.cpp`), `scores.txt`, the local tooling, and the working directories.
+
+The key fact to make unmissable: the only things uploaded to Polygon by hand are **source files**. Zero test *data* is uploaded manually, so Polygon's test indices match `scores.txt` 1:1.
+
+**If you deliberately skip `gen_manual`** (not recommended), `UPLOAD.md` must instead list each `stK/xx` file as a manual test upload, in order, **before** the PASTE of `script.txt` — the script's `> $` continues after the manual tests, so their indices decide the whole judge order, and `scores.txt` has to be renumbered to match.
 
 ### Polygon package → cafe-grader judge data
 
@@ -715,7 +723,8 @@ For **graph** problems: always include a path graph and a star. If M allows it, 
 - [ ] `scores.txt` lists every test in judge order and matches `script.txt` line-for-line; one uniform exact-decimal score, total exactly 100
 - [ ] Expected per-test score of every partial/wa/tle solution computed and verified empirically
 - [ ] Every solution has a Polygon tag derived from its **observed** verdict mix (Step 9.5), not from reading the source; any mixed WA+TLE file is tagged `Incorrect`
-- [ ] Upload map reported to the user: which files are uploaded as sources, and that NO test data is uploaded manually (or, if `gen_manual` was skipped, which `stK/xx` files are manual tests and at which indices)
+- [ ] `UPLOAD.md` written with REAL file names, REAL verified tags, and explicit UPLOAD / PASTE / DO NOT UPLOAD actions — no placeholders, no prose the user has to interpret
+- [ ] `UPLOAD.md` states that NO test data is uploaded by hand (or, if `gen_manual` was skipped, lists each `stK/xx` manual test and its index)
 - [ ] `poly_to_cafe.sh` copied into the package; `cafe/` built from the Polygon download and diffed against locally generated tests (must be byte-identical)
 - [ ] No two lines in `script.txt` share the same generator+arguments — every repeated call has a distinct trailing seed
 - [ ] `gen_random` clamps m to `max(n-1, atoi(argv[...]))` so seed suffixes never produce an invalid edge count

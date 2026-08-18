@@ -28,6 +28,7 @@ IOI problems use **subtask-based partial scoring**: contestants receive points f
 | `solutions/sol_st1_2_3.cpp` | Passes subtasks 1–3 (if ≥4 subtasks exist) |
 | `solutions/wa_*.cpp` | Wrong-answer solutions (3–4 distinct failure modes) |
 | `solutions/tle_*.cpp` | Correct-logic but TLE solutions (1–2 files) |
+| `UPLOAD.md` | Click-through upload checklist — every file, where it goes, which tag, what is never uploaded |
 
 **Directory layout** — keep generators and solutions in their own directories so each set can be bulk-uploaded to Polygon in one go:
 
@@ -574,6 +575,24 @@ For **graph** problems: always include a path graph and a star. If M allows it, 
 
 ---
 
+## Step 12.5 — Write UPLOAD.md, the explicit click-through checklist
+
+Prose like "upload the generators" is not enough. Produce an `UPLOAD.md` that names every file, says whether to **UPLOAD** it from disk or **PASTE** it into a field, and gives the exact Polygon setting — written as mechanically as `script.txt`, one action per line, with `- [ ]` checkboxes and REAL file names and REAL Step 9.5 tags (never placeholders).
+
+Sections, in order:
+
+1. **General info** — time limit, memory limit, checker, and (for IOI) that test groups ARE enabled.
+2. **Source files (generators)** — UPLOAD each `generators/*.cpp`; `DO NOT UPLOAD testlib.h`, Polygon provides it.
+3. **Validator** — UPLOAD `validator.cpp` and set it as the validator.
+4. **Solutions** — one row per file: `UPLOAD this file | Set solution type to | Verified behavior`, using the Step 9.5 tags; call out any `Incorrect` (mixed) row and why a pure tag would be rejected.
+5. **Tests** — UPLOAD each `stK/xx` hand-crafted file as a manual test **and state which group each belongs to**, then PASTE `script.txt` (whose `@N` markers assign the generated tests to groups), then mark the sample test.
+6. **Groups and points** — enable groups, set each group's points from the subtask table, set the group dependencies and the per-group "all tests" requirement.
+7. **Never uploaded anywhere** — closing table: `testlib.h`, local tooling, and working directories.
+
+Unlike the cafe variant, IOI packages DO upload test data by hand: the `stK/` files are real manual tests, so `UPLOAD.md` must list each one with its target group and confirm the resulting test indices before the script's tests are appended.
+
+---
+
 ## Final Checklist
 
 - [ ] Subtask table written and shown to user (with added intermediate subtasks if original had fewer than 4)
@@ -594,6 +613,7 @@ For **graph** problems: always include a path graph and a star. If M allows it, 
 - [ ] 3–4 `wa_*.cpp` files with "Fails on:" and "To expose:" comment headers
 - [ ] 1–2 `tle_*.cpp` files with "TLEs on:" header
 - [ ] Every solution has a Polygon tag derived from its **observed** verdict mix (Step 9.5), not from reading the source; any mixed WA+TLE file is tagged `Incorrect`
+- [ ] `UPLOAD.md` written with REAL file names and tags, explicit UPLOAD / PASTE / DO NOT UPLOAD actions, and each `stK/xx` manual test mapped to its group
 - [ ] Graph/tree generators: edges shuffled or reverse-topological — never bare sequential
 - [ ] Every adversarial/special generator guarantees reachability or is intentionally testing the -1 case
 - [ ] Constraints in all generators match the subtask table exactly
