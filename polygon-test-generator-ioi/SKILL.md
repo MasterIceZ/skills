@@ -1,98 +1,73 @@
 ---
 name: polygon-test-generator-ioi
-description: Generate IOI-style test data with subtask structure from a competitive programming problem statement and solutions. Produces testlib.h-based generators, a subtask-aware validator, hand-crafted tests organized per subtask, subtask-specific partial solutions (sol_st1.cpp, sol_st1_2.cpp, …), wrong/TLE solutions for stress testing, and a test script with group markers. Always use this skill when the user wants to generate IOI tests, mentions "subtasks", "partial scoring", "IOI", "CMS", "task groups", or provides a problem with subtask constraints and asks for test data. Invoke even if the user just says "generate tests" for an IOI-style CP problem.
+description: Generate IOI-style test data with subtasks for a competitive programming problem, authored for upload to Codeforces Polygon, producing subtask-aware testlib.h generators, a group-aware validator, hand-crafted tests per subtask embedded through gen_manual, a partial-solution ladder (sol_st1, sol_st1_2, …), wrong/TLE solutions, a script.txt with @N group markers, empirically derived Polygon solution tags, and an UPLOAD.md click-through checklist. Use when the problem has subtasks with partial scoring or the user asks for IOI/CMS-style tests.
+when_to_use: Trigger phrases include "IOI", "CMS", "subtasks", "partial scoring", "task groups", or "generate tests" for a statement that lists subtask constraints. For plain Polygon tests use polygon-test-generator; for cafe-grader per-test scoring use polygon-test-generator-cafe.
 ---
 
 # IOI Test Generator
 
-Generate IOI-style test data from a problem statement (Markdown or LaTeX) and provided solutions.
-IOI problems use **subtask-based partial scoring**: contestants receive points for each subtask whose constraints are fully satisfied by their solution.
+Produce a complete, verified IOI-style package from a problem statement (Markdown or LaTeX) and the provided solutions. IOI scoring is per subtask: a contestant earns a subtask's points only when every test in that group passes, so the package is organized around subtasks from the first step to the upload checklist.
 
-## What You Produce
+Keep the user informed as you go: show the subtask table before generating anything, give a one-line update as each stage completes, and close with a recap that lists every produced file, the solution tag table, and any verification that failed or was skipped. Deliver the whole package in one pass; if a part cannot be produced (for example, a custom checker), say so in the recap instead of stopping early.
 
-| File | Purpose |
+## What you produce
+
+| Path | Purpose |
 |------|---------|
-| `generators/gen_edge.cpp` | Edge/corner cases, subtask-aware |
-| `generators/gen_random.cpp` | Random tests, subtask-aware |
-| `generators/gen_adversarial.cpp` | Worst-case inputs |
-| `generators/gen_special.cpp` | Structural inputs (algebraic/combinatorial shapes) |
-| `generators/gen_stress.cpp` | Tiny tests for stress testing against brute |
-| `generators/gen_manual.cpp` | Emits each hand-crafted test verbatim, so `script.txt` can list ALL tests |
-| `validator.cpp` | Validates input; checks per-subtask group constraints |
-| `st1/01`, `st1/02`, … | Hand-crafted tests, organized per subtask |
-| `st2/01`, `st2/02`, … | (repeat for each subtask) |
+| `generators/gen_edge.cpp` | Edge and corner cases, subtask-aware |
+| `generators/gen_random.cpp` | Random tests within a subtask's constraints |
+| `generators/gen_special.cpp` | Structural shapes (algebraic/combinatorial) |
+| `generators/gen_adversarial.cpp` | Worst-case inputs per subtask |
+| `generators/gen_stress.cpp` | Tiny tests for the stress loop |
+| `generators/gen_manual.cpp` | Emits each hand-crafted test verbatim so `script.txt` can list every test |
+| `validator.cpp` | Validates input and checks per-group constraints |
+| `st1/01`, `st1/02`, … `stK/…` | Hand-crafted tests per subtask (source of truth, embedded in `gen_manual`) |
 | `script.txt` | Test script with `@N` group markers |
-| `solutions/sol.cpp` | Model solution (full score) — fix/confirm the provided one |
-| `solutions/brute.cpp` | Correct but slow (handles all small subtasks) |
-| `solutions/sol_st1.cpp` | Passes **only** subtask 1 |
-| `solutions/sol_st1_2.cpp` | Passes subtasks 1–2 |
-| `solutions/sol_st1_2_3.cpp` | Passes subtasks 1–3 (if ≥4 subtasks exist) |
-| `solutions/wa_*.cpp` | Wrong-answer solutions (3–4 distinct failure modes) |
-| `solutions/tle_*.cpp` | Correct-logic but TLE solutions (1–2 files) |
-| `UPLOAD.md` | Click-through upload checklist — every file, where it goes, which tag, what is never uploaded |
-
-**Directory layout** — keep generators and solutions in their own directories so each set can be bulk-uploaded to Polygon in one go:
+| `solutions/sol.cpp` | Model solution, full score |
+| `solutions/brute.cpp` | Correct but slow |
+| `solutions/sol_st1.cpp`, `sol_st1_2.cpp`, `sol_st1_2_3.cpp` | Partial ladder: passes subtasks 1, 1–2, 1–3 (the last only with 4+ subtasks) |
+| `solutions/wa_*.cpp` | 3–4 wrong-answer solutions with distinct failure modes |
+| `solutions/tle_*.cpp` | 1–2 correct-but-slow solutions |
+| `UPLOAD.md` | Click-through upload checklist: every file, where it goes, which tag |
 
 ```
 problem/
 ├── generators/     # every gen_*.cpp
 ├── solutions/      # model + brute + partial ladder + wa_* + tle_*
-├── validator.cpp   # stays at the package root (own upload slot in Polygon)
+├── validator.cpp   # package root: Polygon has its own upload slot for it
 ├── st1/ … stK/     # hand-crafted tests per subtask
-└── script.txt
+├── script.txt
+└── UPLOAD.md
 ```
-Compiled binaries and generated tests go in a local `build/` directory — never mixed into the source dirs. In `script.txt`, reference generators by bare name (`gen_edge …`), not by path — Polygon resolves uploaded generators by name.
 
-`testlib.h` is pre-available in Polygon — do not upload it. For local testing:
-`https://raw.githubusercontent.com/MikeMirzayanov/testlib/refs/heads/master/testlib.h`
+Generators and solutions live in their own directories so each set can be bulk-uploaded to Polygon in one go. Compiled binaries and generated tests go in a local `build/` directory, kept out of the source directories. `script.txt` refers to generators by bare name (`gen_edge …`) because Polygon resolves uploaded generators by name. `testlib.h` is already available in Polygon, so it is not uploaded; for local builds download it from `https://raw.githubusercontent.com/MikeMirzayanov/testlib/refs/heads/master/testlib.h`.
 
----
+## Step 1 — Define the subtasks
 
-## Step 0 — Identify and Define Subtasks
-
-Before writing any generator, extract (or infer) the subtask structure. This is the foundation everything else is built on.
-
-### From the problem statement
-
-Read every "Subtask" or "Constraints" section. Produce a table:
+Everything else is built on the subtask table, so settle it first. Read every "Subtask" or "Constraints" section and produce:
 
 | Subtask | Points | Additional constraints |
 |---------|--------|----------------------|
-| 1 | p₁ | N ≤ 10, no further constraints |
+| 1 | p₁ | N ≤ 10 |
 | 2 | p₂ | N ≤ 1 000 |
 | 3 | p₃ | All aᵢ equal |
 | 4 | p₄ | No further constraints (N ≤ 100 000) |
 
-Subtasks are **cumulative**: subtask k tests are also valid subtask k−1 inputs (unless stated otherwise, e.g., "exactly k distinct values"). The final subtask is always the full constraint set.
+Subtasks are cumulative: a subtask-k test is also a valid subtask k−1 input, unless the statement says otherwise (for example "exactly k distinct values"). The final subtask is the full constraint set.
 
-### If subtasks are missing or too coarse
+IOI problems typically have 4–6 subtasks. If the statement has only 2–3, add intermediate subtasks at natural complexity boundaries: after the brute-force bound (N ≤ 10 or N ≤ 100), after the quadratic bound (N ≤ 3 000–5 000), after the N log N bound (N ≤ 100 000), plus any problem-specific structural subtask ("tree is a path", "all values distinct", "graph is bipartite"). Show the final table to the user before writing generators.
 
-IOI problems should typically have 4–6 subtasks. If the problem only has 2–3, **add intermediate subtasks** at natural algorithmic complexity boundaries:
-
-- After the brute-force boundary (N ≤ 10 or N ≤ 100 for O(N³) or O(N²) brutes)
-- After the quadratic boundary (N ≤ 3 000–5 000 for O(N²))
-- After the N log N boundary (N ≤ 100 000)
-- Any problem-specific structural subtask (e.g., "tree is a path/star", "all values distinct", "graph is bipartite")
-
-Announce the final subtask list to the user before proceeding.
-
----
-
-## Step 1 — Parse the Problem Statement
+## Step 2 — Parse the problem statement
 
 Extract:
 
-- **Input format**: variable names, structure, exact reading order
-- **Full constraints**: every bound across all subtasks
-- **Multiple test cases?** If first line is T, note it — handle T-wrapping in all generators
-- **Output spec**: unique answer, any valid answer, yes/no, floating point — decide if the answer is unique. A **custom checker** is needed whenever multiple outputs are valid: printing an actual path/assignment/permutation (not just its cost), any-valid-answer constructive problems, floating point with tolerance. If a checker is needed, note it but don't generate it — it's too problem-specific.
-- **Problem type**: see heuristics table at the end
+- **Input format**: variable names, structure, exact reading order.
+- **Full constraints**: every bound across all subtasks.
+- **Multiple test cases**: if the first line is T, every generator wraps its output in T cases.
+- **Output spec**: decide whether the answer is unique. A custom checker is needed when several outputs are valid (printing a path, assignment, or permutation rather than its cost; any-valid-answer constructive problems; floating point with tolerance). Note that one is needed but do not write it; it is too problem-specific for this skill.
+- **Problem type**: match against [reference/patterns.md](reference/patterns.md) to choose edge and adversarial shapes.
 
----
-
-## Step 2 — Classify Solutions
-
-Identify every provided file by name and content:
+## Step 3 — Classify the provided solutions
 
 | Role | Common names |
 |------|-------------|
@@ -100,294 +75,97 @@ Identify every provided file by name and content:
 | Brute force | `brute`, `slow`, `naive`, `bf`, `n2`, `n3` |
 | Wrong solutions | `wa`, `tle`, `mle`, `wrong`, `hack`, `bad` |
 
-If no brute force is provided, write one (see Step 8).
+If no brute force is provided, write one in Step 5.
 
----
+## Step 4 — Write the generators
 
-## Step 3 — Write generators/gen_edge.cpp
-
-Generates deterministic edge and corner cases. Takes `subtask` and `subtype` arguments.
+Every generator except `gen_stress` and `gen_manual` takes the subtask as its first argument and caps N with a per-subtask table that mirrors Step 1 exactly. Full templates with comment scaffolds are in [reference/templates.md](reference/templates.md).
 
 ```cpp
 #include "testlib.h"
 #include <bits/stdc++.h>
 using namespace std;
 
-// Per-subtask N limits — match your subtask table exactly
-const int MAXN_ST[] = {0, 10, 1000, 5000, 100000};  // index 0 unused
+const int MAXN_ST[] = {0, 10, 1000, 5000, 100000};  // index 0 unused; match the subtask table
 
 int main(int argc, char* argv[]) {
     registerGen(argc, argv, 1);
     int st      = argc > 1 ? atoi(argv[1]) : 4;   // subtask
-    int subtype = argc > 2 ? atoi(argv[2]) : 0;
-
-    int MAXN = MAXN_ST[st];
-
-    // subtype 0: N = 1 (minimum)
-    // subtype 1: N = MAXN for this subtask, all values = MINVAL
-    // subtype 2: N = MAXN for this subtask, all values = MAXVAL
-    // subtype 3: N = MAXN, sorted ascending
-    // subtype 4: N = MAXN, sorted descending
-    // subtype 5+: problem-specific edges
-    
-    // generate and print...
-    return 0;
-}
-```
-
-The `st` argument controls which subtask's N limit is used — `gen_edge 1 0` produces a tiny N=1 case for subtask 1, while `gen_edge 4 1` produces a max-N edge case for the final subtask.
-
----
-
-## Step 4 — Write generators/gen_random.cpp
-
-Generates random tests within a subtask's constraint range. Takes `subtask`, `n` (optional), and a seed.
-
-```cpp
-#include "testlib.h"
-#include <bits/stdc++.h>
-using namespace std;
-
-const int MAXN_ST[] = {0, 10, 1000, 5000, 100000};
-
-int main(int argc, char* argv[]) {
-    registerGen(argc, argv, 1);
-    int st   = argc > 1 ? atoi(argv[1]) : 4;
-    int MAXN = MAXN_ST[st];
-    int n    = argc > 2 ? min(atoi(argv[2]), MAXN) : rnd.next(1, MAXN);
-    // argv[3] acts as seed suffix (no need to read it — testlib uses all argv for seeding)
-
-    // Generate n, then generate values/edges/etc. within subtask constraints.
-    // Subtask-specific constraints (e.g., "all aᵢ equal" for subtask 3) must be enforced here.
-    // print in exact input format
-    return 0;
-}
-```
-
-**Important:** enforce per-subtask constraints inside the generator, not just by size. If subtask 3 requires all values equal, `gen_random 3 500` must produce all-equal values even at N=500 — the constraint is structural, not just a bound.
-
-To get distinct tests at the same subtask+size, append a different trailing integer — `gen_random 4 100000 1` and `gen_random 4 100000 2` produce completely different tests.
-
----
-
-## Step 5 — Write generators/gen_special.cpp
-
-Generates structural inputs with mathematical shapes. Takes `subtask` and `subtype`.
-
-```cpp
-#include "testlib.h"
-#include <bits/stdc++.h>
-using namespace std;
-
-const int MAXN_ST[] = {0, 10, 1000, 5000, 100000};
-
-int main(int argc, char* argv[]) {
-    registerGen(argc, argv, 1);
-    int st      = argc > 1 ? atoi(argv[1]) : 4;
-    int subtype = argc > 2 ? atoi(argv[2]) : 0;
+    int subtype = argc > 2 ? atoi(argv[2]) : 0;   // or n for gen_random
     int MAXN    = MAXN_ST[st];
-
-    // Examples:
-    // Trees:        complete binary tree, star, bamboo, caterpillar
-    // Strings:      pure palindrome, period-2 pattern, Thue-Morse
-    // Numbers:      all prime, all powers of 2, arithmetic progression
-    // Graphs:       bipartite, complete bipartite, grid graph
-    // Permutations: cyclic shift, bitonic, many fixed points
-
+    // build an input that satisfies every constraint of subtask st, then print it
     return 0;
 }
 ```
 
-Aim for 4–6 subtypes per generator. For maximum-constraint subtasks (the final ones), use `MAXN_ST[4]`; for earlier subtasks, cap to their bounds.
+| Generator | Arguments | Produces |
+|-----------|-----------|----------|
+| `gen_edge` | `st subtype` | Deterministic corners at this subtask's bound: N=1; N=MAXN with all MINVAL, all MAXVAL, sorted ascending, sorted descending; then problem-specific edges. `gen_edge 1 0` is a tiny subtask-1 case, `gen_edge 4 1` a max-N case for the final subtask |
+| `gen_random` | `st [n] [seed]` | Random inputs with `n = min(atoi(argv[2]), MAXN)` (random in range when omitted). Structural subtask constraints are enforced here too: if subtask 3 requires all values equal, `gen_random 3 500` produces all-equal values, not just N ≤ 500 |
+| `gen_special` | `st subtype` | 4–6 structural shapes, each a distinct mathematical structure rather than a size variant (bamboo, star, caterpillar; palindromes, period-2 strings; all-prime, powers of 2; bipartite, grid; cyclic-shift or bitonic permutations) |
+| `gen_stress` | `[n]` | Tiny inputs (STRESS_MAXN ≈ 8–15, whatever `brute` solves in under 50 ms). It explores the full valid space and deliberately ignores structural subtask constraints, because the stress loop is looking for any disagreement between `sol` and `brute` |
+| `gen_adversarial` | `st subtype` | Maximum-N inputs for the subtask built to break naive solutions: the O(N²) killer, the anti-greedy counter-example, the problem-specific worst case. Aim each subtype at a specific `wa_*`, `tle_*`, or ladder solution |
+| `gen_manual` | `st idx` | Prints hand-crafted test `st<st>/<idx>` verbatim (Step 8) |
 
----
+Rules that are easy to get wrong:
 
-## Step 6 — Write generators/gen_stress.cpp
+- **Random values come from testlib's `rnd`** (`rnd.next(lo, hi)`), even inside an otherwise deterministic pattern. `registerGen` seeds `rnd` from the full argv, so every test is reproducible.
+- **Seeding**: because the seed is derived from all arguments, `gen_random 4 100000 1` and `gen_random 4 100000 2` differ while two identical lines produce identical tests. Every repeated call in `script.txt` needs a distinct trailing token. Generators that never call `rnd` are fully deterministic, so call each of their subtypes once.
+- **Seed vs. m collision**: if `gen_random` reads an edge count `m` from argv, a trailing seed could set m below n−1 and the validator would reject the header. Clamp with `m = max(n - 1, atoi(argv[k]))`.
+- **Edge order in graph generators**: chain, BFS, or spanning-tree order can neuter an adversarial case (Bellman-Ford finishes in one pass on topologically ordered edges). Shuffle edges with testlib's `shuffle` or print a bamboo in reverse.
+- **Reachability**: `gen_adversarial` and `gen_special` do not build a spanning tree automatically. If the problem never outputs −1, every subtype guarantees the required reachability; if −1 is legal, include one intentionally disconnected adversarial case.
+- **Verify the TLE**: after writing an adversarial generator, run `timeout <TL> build/tle_x < input`; an exit code of 0 means the case is accidentally easy.
 
-Tiny tests for stress testing against `brute.cpp`. Capped well below even subtask 1's limit.
+## Step 5 — Write the partial-solution ladder
 
-```cpp
-#include "testlib.h"
-#include <bits/stdc++.h>
-using namespace std;
+This is the most IOI-specific part. Write one solution per subtask boundary; each passes every subtask up to k and is intentionally too slow or too specialized for k+1. Header templates are in [reference/templates.md](reference/templates.md).
 
-const int STRESS_MAXN = /* something brute handles in <50ms, typically 8–15 */;
-const int MINVAL = /* from problem */;
-const int MAXVAL = /* from problem */;
+| File | Passes | Typical algorithm |
+|------|--------|-------------------|
+| `solutions/brute.cpp` | Subtask 1, maybe 2 | Simplest obviously-correct approach, complexity irrelevant; also the stress-test oracle |
+| `solutions/sol_st1.cpp` | Subtask 1 only | O(N^k) with large k, or a special case that only handles subtask 1's structure |
+| `solutions/sol_st1_2.cpp` | Subtasks 1–2 | Usually O(N²) |
+| `solutions/sol_st1_2_3.cpp` | Subtasks 1–3 (only with 4+ subtasks) | The "good but not full" contestant submission, e.g. O(N log² N) |
 
-int main(int argc, char* argv[]) {
-    registerGen(argc, argv, 1);
-    int n = argc > 1 ? atoi(argv[1]) : rnd.next(1, STRESS_MAXN);
-    // Same structure as gen_random but capped at STRESS_MAXN.
-    // Do NOT enforce subtask-specific structural constraints here — stress testing
-    // should explore the full valid space even if it crosses subtask boundaries.
-    return 0;
-}
-```
-
----
-
-## Step 7 — Write generators/gen_adversarial.cpp
-
-Worst-case inputs designed to break naive solutions. Takes `subtask` and `subtype`.
-
-```cpp
-#include "testlib.h"
-#include <bits/stdc++.h>
-using namespace std;
-
-const int MAXN_ST[] = {0, 10, 1000, 5000, 100000};
-
-int main(int argc, char* argv[]) {
-    registerGen(argc, argv, 1);
-    int st      = argc > 1 ? atoi(argv[1]) : 4;
-    int subtype = argc > 2 ? atoi(argv[2]) : 0;
-    int MAXN    = MAXN_ST[st];
-
-    // Always use maximum N for the given subtask.
-    // subtype 0: worst case for O(N²) naive — sorted ascending
-    // subtype 1: worst case for greedy — carefully constructed counter-example
-    // subtype 2+: problem-specific
-
-    return 0;
-}
-```
-
-**Edge ordering in graph generators:** always shuffle edges or print in reverse topological order to prevent accidentally easy orderings that let naive solutions pass.
-
-**Connectivity:** guarantee reachability unless the problem can output -1 (unreachable), in which case include at least one disconnected adversarial case intentionally.
-
----
-
-## Step 8 — Write Subtask-Specific Solutions
-
-This is the most IOI-specific part. Write one solution per subtask boundary — each one passes all subtasks up to k but is **intentionally too slow or wrong** for subtask k+1.
-
-### solutions/brute.cpp — Subtask 1 boundary
-
-Simple, obviously-correct, slow solution. Should pass subtask 1 (and maybe 2) but TLE on higher subtasks.
-
-```cpp
-// brute.cpp — O(?) brute force, correct but too slow for large N
-// Passes: subtask 1 (N ≤ 10), possibly subtask 2 (N ≤ 1000) if fast enough
-// Use for stress testing: diff <(./sol < test) <(./brute < test)
-#include <bits/stdc++.h>
-using namespace std;
-int main() {
-    // simplest possible correct implementation, no regard for complexity
-}
-```
-
-### solutions/sol_st1.cpp — Passes only subtask 1
-
-A solution whose algorithm is correct for the small constraints of subtask 1 but is too slow or has a missing case for larger inputs. Typical: O(N^k) with large k, or a special-case solution that only handles the structural constraint of subtask 1.
-
-```cpp
-// sol_st1.cpp — Passes subtask 1 (N ≤ 10) ONLY
-// Algorithm: [name the algorithm]
-// Why it fails subtask 2+: [TLE at O(N³), or missing case for larger N, etc.]
-#include <bits/stdc++.h>
-using namespace std;
-int main() { /* ... */ }
-```
-
-### solutions/sol_st1_2.cpp — Passes subtasks 1–2
-
-Passes up through subtask 2 (e.g., N ≤ 1 000) but not further. Usually an O(N²) algorithm.
-
-```cpp
-// sol_st1_2.cpp — Passes subtasks 1–2 (N ≤ 1000) ONLY
-// Algorithm: [e.g., O(N²) DP]
-// Why it fails subtask 3+: [TLE at N=5000, or missing structural subtask constraint]
-#include <bits/stdc++.h>
-using namespace std;
-int main() { /* ... */ }
-```
-
-### solutions/sol_st1_2_3.cpp — Passes subtasks 1–3 (if ≥4 subtasks)
-
-Only needed when there are 4+ subtasks. This solution is the "good but not full" contestant submission.
-
-```cpp
-// sol_st1_2_3.cpp — Passes subtasks 1–3 ONLY
-// Algorithm: [e.g., O(N log² N)]
-// Why it fails subtask 4+: [explain the gap]
-#include <bits/stdc++.h>
-using namespace std;
-int main() { /* ... */ }
-```
-
-### Selecting the right algorithm per subtask boundary
-
-| Subtask | Typical N limit | Common algorithm class |
-|---------|----------------|----------------------|
+| Subtask | Typical N limit | Algorithm class |
+|---------|----------------|-----------------|
 | 1 | ≤ 10–100 | Brute force / O(N^k) |
 | 2 | ≤ 1 000–3 000 | O(N²) DP or O(N² log N) |
 | 3 | ≤ 10 000–50 000 | O(N log N) or O(N√N) |
 | 4 (full) | ≤ 100 000–500 000 | O(N log N) or better |
 
-If the problem has structural subtasks (e.g., "tree is a path"), write the specialized solution that only handles that structure and breaks on a general input.
-
----
-
-## Step 9 — Write Wrong/TLE Solutions
-
-### solutions/wa_*.cpp — Wrong Answer Solutions (3–4 files)
-
-Each implements a *distinct* common wrong approach. Cover different failure modes.
+For a structural subtask ("tree is a path"), write the specialized solution that handles only that structure and breaks on a general input. Each ladder file's header states the algorithm and why it fails the next subtask:
 
 ```cpp
-// wa_greedy.cpp — WRONG: [describe the mistake in one line]
-// Fails on: [describe what kind of input breaks it]
+// sol_st1_2.cpp — Passes subtasks 1–2 (N ≤ 1000) ONLY
+// Algorithm: [e.g., O(N²) DP]
+// Why it fails subtask 3+: [TLE at N=5000, or missing structural constraint]
+```
+
+## Step 6 — Write wrong and TLE solutions
+
+- **`solutions/wa_*.cpp`** (3–4 files): each implements a *different* wrong approach so the suite is tested against several failure modes: greedy without lookahead, DP with a wrong base case, mishandled edge cases, `int` overflow, binary-search off-by-one. Name by mistake: `wa_greedy.cpp`, `wa_overflow.cpp`, …
+- **`solutions/tle_*.cpp`** (1–2 files): correct logic, too-high complexity, written independently of the ladder so it models a realistic contestant mistake.
+
+Headers tie each file to the tests that expose it; the named generator subtype has to exist and has to make that solution fail:
+
+```cpp
+// wa_greedy.cpp — WRONG: [the mistake in one line]
+// Fails on: [what kind of input breaks it]
 // To expose: gen_special 4 2 or gen_edge 4 5
-#include <bits/stdc++.h>
-using namespace std;
-int main() { /* ... */ }
 ```
-
-Good wrong approaches: greedy without lookahead, DP with wrong base case, mishandled edge cases, overflow with int instead of long long, off-by-one in binary search.
-
-### solutions/tle_*.cpp — TLE Solutions (1–2 files)
-
-Correct logic but too-high complexity. Model realistic contestant mistakes.
 
 ```cpp
-// tle_n2.cpp — CORRECT but O(N²): [describe the approach]
+// tle_n2.cpp — CORRECT but O(N²): [the approach]
 // TLEs on: N ≥ [threshold] — triggers with gen_adversarial 4 0
-// Passes: subtask 1 and 2 (same as sol_st1_2.cpp but written independently)
-#include <bits/stdc++.h>
-using namespace std;
-int main() { /* ... */ }
+// Passes: subtasks 1 and 2
 ```
 
----
+Common wrong and slow approaches per problem type are listed in [reference/patterns.md](reference/patterns.md).
 
-## Step 9.5 — Tag Every Solution for Polygon
+## Step 7 — Write validator.cpp
 
-Polygon asks for a **solution type** per file and verifies it: a tag claiming more than the solution does makes Polygon's solution check fail, blocking the package. The tag describes *how* the solution fails, not how badly.
-
-| Polygon tag | Means | Use for |
-|-------------|-------------|---------|
-| **Main correct solution** | passes every test; exactly one per problem | the model solution |
-| **Correct** | passes every test | a second, independently written full solution |
-| **Wrong answer** | produces WA somewhere, and **never** TLEs/crashes | `wa_*.cpp`, and fast-but-wrong partials |
-| **Time limit exceeded** | TLEs somewhere, and is **never** wrong where it finishes | `brute.cpp`, `tle_*.cpp`, partials that are only ever too slow |
-| **Time limit exceeded or correct** | may TLE or may pass; never wrong | borderline solutions you don't want to pin down |
-| **Memory limit exceeded** | exceeds the memory limit | only a deliberately memory-hungry file |
-| **Presentation error** | right values, malformed formatting | only if the checker distinguishes PE |
-| **Incorrect** | fails *somehow* — the catch-all | **any solution with a MIXED failure profile** |
-
-**The purity rule, and why `Incorrect` exists.** Subtask ladder solutions frequently fail two different ways: too slow on the big subtasks *and* plain wrong on a subtask whose inputs they mishandle. Such a file is neither `Wrong answer` nor `Time limit exceeded` — it must be **`Incorrect`**. A common instance: an O(N·M) solution that also reads values into `int` TLEs the max-size groups but wrong-answers the small tests carrying out-of-range values.
-
-**Classify empirically — never infer the tag from reading the source.** Run every solution over every test, record the verdict kind per test (OK / WA / TLE / RTE), and derive the tag from the observed set: `{OK}` → Correct, `{OK, WA}` → Wrong answer, `{OK, TLE}` → Time limit exceeded, anything else mixed → Incorrect.
-
-Report a table to the user (file → tag → observed mix → expected subtask score) so tagging at upload time is mechanical. The tag and the score are separate facts — a solution's group score says nothing about which tag Polygon will accept.
-
----
-
-## Step 10 — Write validator.cpp
-
-The validator lives at the package root, not in `generators/` — Polygon uploads it in its own slot.
+The validator sits at the package root because Polygon uploads it in its own slot. It reads the input exactly as the statement specifies and enforces the per-group bounds Polygon passes through `--group`:
 
 ```cpp
 #include "testlib.h"
@@ -395,53 +173,33 @@ using namespace std;
 
 int main(int argc, char* argv[]) {
     registerValidation(argc, argv);
+    // Polygon runs: validator --group=<k> --testset=tests
+    string group = validator.group();
+    int st = group.empty() ? 0 : stoi(group);
 
-    // Read the group (subtask) from --group flag:
-    // In Polygon, pass --group=1 --testset=tests to the validator.
-    // testlib provides it as: inf.group() or via argv parsing.
-    // If using Polygon groups, you can do:
-    //   string group = validator.group();
-    //   int st = group.empty() ? 0 : stoi(group);
-    //
-    // Then add per-group constraint checks after reading:
-    //   if (st >= 1) ensuref(n <= 10, "subtask 1: n must be <= 10");
-    //   if (st >= 2) ensuref(n <= 1000, "subtask 2: n must be <= 1000");
-    //   ...
+    // inf.readInt(lo, hi, "name")      integer with bounds check
+    // inf.readLong(lo, hi, "name")     long long
+    // inf.readToken("[a-z]+", "name")  token matching a regex
+    // inf.readSpace()  inf.readEoln()  inf.readEof()
 
-    // Read input exactly as the problem specifies.
-    // Key methods:
-    //   inf.readInt(lo, hi, "name")      — integer with bounds check
-    //   inf.readLong(lo, hi, "name")     — long long
-    //   inf.readToken("[a-z]+", "name")  — string matching regex
-    //   inf.readSpace()                  — assert ' '
-    //   inf.readEoln()                   — assert '\n'
-    //   inf.readEof()                    — assert end of file
-
+    // per-group checks after reading the input, one per subtask, e.g.
+    //   if (st == 1) ensuref(n <= 10,   "subtask 1: n must be <= 10");
+    //   if (st == 2) ensuref(n <= 1000, "subtask 2: n must be <= 1000");
     return 0;
 }
 ```
 
----
+## Step 8 — Hand-crafted tests and gen_manual
 
-## Step 11 — Hand-crafted Test Files
+Create one directory per subtask (`st1/`, `st2/`, …) with 2–3 static tests each, named without extension:
 
-Create a directory per subtask (`st1/`, `st2/`, …). Within each, write 2–3 static tests:
+- `01`: minimum valid input within the subtask's constraints.
+- `02`: maximum N for this subtask, all maximum values.
+- `03`: the subtask's problem-specific must-have (for a "path graphs" subtask, the extremal path).
 
-- `01` — minimum valid input within subtask constraints (N=1 or simplest)
-- `02` — maximum N for this subtask, all maximum values
-- `03` — problem-specific must-have for this subtask (e.g., if subtask 3 restricts to "path graphs", include the extremal path)
+A test in `stK/` satisfies every constraint of subtask K, which makes it valid for subtasks 1 through K−1 as well.
 
-Tests for subtask k must satisfy **all** constraints of subtask k (they will also implicitly satisfy subtasks 1 through k−1).
-
-Keep these files as the human-readable source of truth, then **embed them in `generators/gen_manual.cpp`** (next step) so `script.txt` can place them itself. Do NOT plan on uploading them to Polygon as manual tests.
-
----
-
-## Step 12 — Test Script (script.txt)
-
-### The script must include the hand-crafted tests too
-
-**`script.txt` lists EVERY test — hand-crafted ones included.** Polygon scripts cannot reference uploaded manual test files, so write a `generators/gen_manual.cpp` that embeds each `stK/xx` file and prints it verbatim:
+These files are the human-readable source of truth, but they are not uploaded as Polygon manual tests. Polygon scripts cannot reference uploaded manual tests, and a manual test's group has to be set by hand in the UI, which is easy to get wrong and silently changes what that subtask verifies. Instead, generate `generators/gen_manual.cpp` programmatically from the `stK/` directories so each file is embedded verbatim:
 
 ```cpp
 // gen_manual.cpp — emits a hand-crafted test verbatim.
@@ -462,13 +220,11 @@ int main(int argc, char* argv[]) {
 }
 ```
 
-Generate this file programmatically from the `stK/` directories rather than retyping the tests, and assert in verification that `gen_manual <st> <idx>` reproduces each `stK/xx` **byte-for-byte** so the two can never drift.
+Step 10 asserts that `gen_manual <st> <idx>` reproduces each `stK/xx` byte-for-byte so the two can never drift.
 
-Why this matters more for IOI than anywhere else: a `gen_manual` line sits inside a `@N` block, so the hand-crafted test lands in the right **group automatically**. Uploading it as a manual test instead means assigning its group by hand in Polygon's UI — easy to get wrong, and a hand-crafted test in the wrong group silently changes what that subtask verifies.
+## Step 9 — Test script (script.txt)
 
-### Group markers
-
-Use `@N` to mark the start of each subtask group. All tests between `@1` and `@2` belong to subtask 1, and so on. Put each subtask's `gen_manual` lines at the top of its block:
+`script.txt` lists every test, hand-crafted ones included. `@N` marks the start of group N; each block starts with that subtask's `gen_manual` lines so the hand-crafted tests land in the right group automatically.
 
 ```
 @1
@@ -520,156 +276,69 @@ gen_adversarial 4 1 2 > $
 gen_adversarial 4 2 > $
 ```
 
-### Seeding rule
+Repeated calls differ by a trailing seed token (Step 4). Match the `gen_special` and `gen_adversarial` lines to the subtypes actually implemented.
 
-`registerGen(argc, argv, 1)` seeds the RNG from **all** command-line arguments. Two lines with identical arguments produce identical tests. Append a distinct trailing integer to get different outputs from the same generator+args combination:
+## Step 10 — Verify locally
 
-```
-gen_random 4 100000 1 > $   # distinct seed
-gen_random 4 100000 2 > $   # different output
-```
+Copy the scripts from this skill's `scripts/` directory into the package and run them from the package root. They expect `testlib.h` there (or `TESTLIB_DIR` set) and compile with `$CXX`, default `g++`; on macOS set `CXX` to a GNU compiler such as `g++-15`, because Apple's `g++` is clang and lacks `bits/stdc++.h`. Report every failure to the user; a red result is a bug in a generator, a solution, or the subtask table.
 
-Generators that never call `rnd` are immune — call each subtype only once.
+- [scripts/stress.sh](scripts/stress.sh): compiles `gen_stress`, `sol`, and `brute` into `build/`, runs 1000 iterations with the iteration number as the seed, and stops at the first disagreement.
+- [scripts/check_manual.sh](scripts/check_manual.sh): compiles `gen_manual` and compares `gen_manual <st> <idx>` with every `stK/xx` file, reporting any drift.
+- [scripts/check_solution.sh](scripts/check_solution.sh): compiles one solution and compares it with `sol` on every test in the given directories. `check_solution.sh solutions/sol_st1.cpp st1` should report no failures, and `check_solution.sh solutions/sol_st1.cpp st2` should fail or time out on at least one test.
 
----
+Also run each `wa_*` and `tle_*` solution over the generated tests and confirm it fails exactly where its header says it should.
 
-## Step 13 — Local Stress Test Script
+## Step 11 — Tag every solution for Polygon
 
-```bash
-mkdir -p build
-g++ -O2 -std=c++17 -I. -o build/gen_stress generators/gen_stress.cpp
-g++ -O2 -std=c++17 -o build/sol   solutions/sol.cpp    # full correct solution
-g++ -O2 -std=c++17 -o build/brute solutions/brute.cpp
+Polygon asks for a solution type per file and verifies it: a tag claiming more than the solution does fails the solution check and blocks the package. The tag describes how a solution fails, not how badly.
 
-for i in $(seq 1 1000); do
-    build/gen_stress "$i" > test.in   # pass $i: testlib seeds from argv, no args = same test forever
-    build/sol   < test.in > out_sol.txt
-    build/brute < test.in > out_brute.txt
-    if ! diff -q out_sol.txt out_brute.txt > /dev/null 2>&1; then
-        echo "DIFFERENCE on iteration $i"
-        cat test.in
-        echo "--- sol ---"; cat out_sol.txt
-        echo "--- brute ---"; cat out_brute.txt
-        break
-    fi
-done
-echo "Stress test done."
-```
+| Polygon tag | Means | Use for |
+|-------------|-------|---------|
+| Main correct solution | passes every test; exactly one per problem | the model solution |
+| Correct | passes every test | a second, independently written full solution |
+| Wrong answer | WA somewhere, never TLE or RTE | `wa_*.cpp`, fast-but-wrong partials |
+| Time limit exceeded | TLE somewhere, never wrong where it finishes | `brute.cpp`, `tle_*.cpp`, partials that are only ever too slow |
+| Time limit exceeded or correct | may TLE or pass, never wrong | borderline solutions you don't want to pin down |
+| Memory limit exceeded | exceeds the memory limit | a deliberately memory-hungry file |
+| Presentation error | right values, malformed formatting | only if the checker distinguishes PE |
+| Incorrect | fails somehow, the catch-all | any solution with a mixed failure profile |
 
-Also include a subtask validation check:
+Ladder solutions often fail two ways at once: too slow on the big groups and plain wrong on a small group whose inputs they mishandle (an O(N·M) solution that also reads values into `int`, for example). Such a file is neither `Wrong answer` nor `Time limit exceeded`; it is `Incorrect`.
 
-```bash
-# Verify subtask solutions pass their expected subtasks
-g++ -O2 -std=c++17 -o build/sol_st1 solutions/sol_st1.cpp
-for f in st1/*; do
-    build/sol_st1 < "$f" > /tmp/out.txt
-    build/sol     < "$f" > /tmp/ref.txt
-    diff /tmp/out.txt /tmp/ref.txt || echo "FAIL: $f"
-done
-echo "Subtask 1 solution verified."
-```
+Derive the tag empirically rather than from reading the source: run every solution over every test, record the verdict kind per test (OK / WA / TLE / RTE), and map the observed set: `{OK}` → Correct, `{OK, WA}` → Wrong answer, `{OK, TLE}` → Time limit exceeded, anything else mixed → Incorrect. A classification snippet is in [reference/polygon-tags.md](reference/polygon-tags.md). Report a table to the user (file → tag → observed mix → expected subtask score); tag and score are separate facts, and both go into `UPLOAD.md`.
 
-Also assert the script's hand-crafted tests still match their source files — `gen_manual`
-embeds copies, so this is the check that keeps them from drifting:
+## Step 12 — Write UPLOAD.md
 
-```bash
-# every gen_manual entry must reproduce its stK/xx file byte-for-byte
-g++ -O2 -std=c++17 -I. -o build/gen_manual generators/gen_manual.cpp
-for f in st*/*; do
-    st=${f%%/*}; st=${st#st}          # st3/02 -> 3
-    idx=$(basename "$f"); idx=$((10#$idx))   # 02 -> 2
-    build/gen_manual "$st" "$idx" > /tmp/gm.txt
-    diff -q /tmp/gm.txt "$f" > /dev/null || echo "DRIFT: gen_manual $st $idx != $f"
-done
-echo "gen_manual matches every hand-crafted file."
-```
+Prose like "upload the generators" leaves the user interpreting. `UPLOAD.md` is as mechanical as `script.txt`: one action per line with `- [ ]` checkboxes, each marked `UPLOAD` (pick the file from disk), `PASTE` (paste text into a field), or `DO NOT UPLOAD`, with the real file names and the real Step 11 tags rather than placeholders. The section-by-section spec is in [reference/upload-checklist.md](reference/upload-checklist.md).
 
+The fact to make unmissable: the only things uploaded to Polygon by hand are source files (generators, solutions, validator). No test data is uploaded manually, because `gen_manual` lines inside the `@N` blocks assign every hand-crafted test to its group from the script.
 
----
+## Final checklist
 
-## Problem-Type Heuristics
+- [ ] Subtask table shown to the user, with intermediate subtasks added if the statement had fewer than 4
+- [ ] Generators in `generators/`, solutions in `solutions/`, `validator.cpp` at the root
+- [ ] Every generator compiles (`g++ -O2 -std=c++17 -I. generators/gen_edge.cpp -o build/gen_edge`, etc.)
+- [ ] `validator.cpp` reads the exact input format and checks per-group constraints
+- [ ] `stK/` directories exist for every subtask and every hand-crafted test passes the validator
+- [ ] `script.txt` uses `@N` markers and lists every test, hand-crafted ones through `gen_manual` inside their block; nothing is uploaded as a Polygon manual test
+- [ ] `check_manual.sh` reports no drift
+- [ ] No two `script.txt` lines share a generator and argument list; repeated calls differ by a trailing seed
+- [ ] `gen_random` clamps m to `max(n - 1, atoi(argv[k]))`
+- [ ] `gen_special` subtypes are distinct structures, not size variants
+- [ ] `gen_stress` caps N well below subtask 1's limit
+- [ ] `brute.cpp` is correct and passes subtask 1 (maybe 2); `stress.sh` finds no disagreement
+- [ ] `sol_st1.cpp` passes only subtask 1, `sol_st1_2.cpp` only subtasks 1–2, `sol_st1_2_3.cpp` (with 4+ subtasks) only subtasks 1–3; each header explains why it fails the next subtask
+- [ ] 3–4 `wa_*.cpp` with distinct failure modes and "Fails on" / "To expose" headers; 1–2 `tle_*.cpp` with a "TLEs on" header
+- [ ] Every solution's Polygon tag comes from its observed verdict mix; mixed WA+TLE files are tagged `Incorrect`
+- [ ] `UPLOAD.md` has real file names and tags, explicit UPLOAD / PASTE / DO NOT UPLOAD actions, and states that no test data is uploaded by hand
+- [ ] Graph and tree generators shuffle edges or print them in reverse topological order
+- [ ] Every adversarial and special subtype guarantees reachability or is a deliberate −1 case
+- [ ] Constraints in every generator match the subtask table exactly
 
-| Type | Signals | Edge subtypes | Adversarial subtypes |
-|------|---------|--------------|----------------------|
-| Array/sequence | "N integers", "sequence" | min/max/sorted/reverse/all-equal | sorted asc (breaks O(N²)), all-equal |
-| Permutation | "permutation of 1..N" | identity, reverse, random | cyclic shift, reverse |
-| Graph | "N nodes M edges" | N=2, tree, complete, star | star, path/chain, bipartite |
-| Tree | "N nodes, N-1 edges" | N=2, chain, star, single path | bamboo (depth=N, breaks recursion), star |
-| String | "string of length N" | N=1, all 'a', alternating "ab…", palindrome | all 'a', "abababab…" |
-| Grid | "N×M grid" | 1×M, N×1, checkerboard, all same | all same char, checkerboard |
-| Multiple T-cases | "first line T" | max T min-N cases; one max-N single case | max T, each case adversarial |
+## Additional resources
 
-For **tree** problems: always include bamboo (chain of N nodes). Recursive solutions that don't iteratively DFS will stack-overflow.
-
-For **graph** problems: always include a path graph and a star. If M allows it, include a near-complete graph.
-
----
-
-## Common Wrong/TLE Solution Patterns
-
-### Wrong Answer (wa_*.cpp)
-
-| Problem type | Common wrong approach | Breaks on |
-|-------------|----------------------|-----------|
-| Sorting/searching | Greedy picks local minimum without lookahead | Anti-greedy input |
-| DP | Wrong base case | Small inputs near the base case |
-| Graph shortest path | BFS on weighted graph | Graph with varying edge weights |
-| String | Not handling overlapping patterns | Strings with many overlapping occurrences |
-| Counting | Forgetting modular arithmetic / int overflow | Large values near INT_MAX |
-| Binary search | Wrong predicate direction or off-by-one | Boundary answer at lo or hi |
-
-### TLE (tle_*.cpp)
-
-| Problem type | TLE approach | Correct complexity | TLE complexity |
-|-------------|-------------|-------------------|----------------|
-| Sequence queries | Recompute from scratch each query | O(N + Q) with prefix sums | O(N·Q) |
-| Sorting-based | Insertion/selection sort | O(N log N) | O(N²) |
-| Graph BFS/DFS | Rebuild adjacency list every call | O(N + M) once | O(N·(N+M)) |
-| String matching | Naive double loop | O(N) KMP/Z-function | O(N²) |
-| DP transitions | Extra loop per state | O(N log N) with monotone deque | O(N²) |
-
----
-
-## Step 12.5 — Write UPLOAD.md, the explicit click-through checklist
-
-Prose like "upload the generators" is not enough. Produce an `UPLOAD.md` that names every file, says whether to **UPLOAD** it from disk or **PASTE** it into a field, and gives the exact Polygon setting — written as mechanically as `script.txt`, one action per line, with `- [ ]` checkboxes and REAL file names and REAL Step 9.5 tags (never placeholders).
-
-Sections, in order:
-
-1. **General info** — time limit, memory limit, checker, and (for IOI) that test groups ARE enabled.
-2. **Source files (generators)** — UPLOAD each `generators/*.cpp`; `DO NOT UPLOAD testlib.h`, Polygon provides it.
-3. **Validator** — UPLOAD `validator.cpp` and set it as the validator.
-4. **Solutions** — one row per file: `UPLOAD this file | Set solution type to | Verified behavior`, using the Step 9.5 tags; call out any `Incorrect` (mixed) row and why a pure tag would be rejected.
-5. **Tests** — state plainly: **do NOT add any manual test**; every test comes from the script, hand-crafted ones via `gen_manual`. PASTE `script.txt` (whose `@N` markers assign each test, including the `gen_manual` ones, to its group), then mark the sample test and state the exact test count Polygon must show.
-6. **Groups and points** — enable groups, set each group's points from the subtask table, set the group dependencies and the per-group "all tests" requirement.
-7. **Never uploaded anywhere** — closing table: `testlib.h`, local tooling, and working directories.
-
-The only things uploaded to Polygon by hand are **source files** (generators, solutions, validator). No test *data* is uploaded manually — because `gen_manual` lines live inside the `@N` blocks, group assignment comes from the script rather than from clicking through Polygon's UI.
-
----
-
-## Final Checklist
-
-- [ ] Subtask table written and shown to user (with added intermediate subtasks if original had fewer than 4)
-- [ ] Generators in `generators/`, all solutions in `solutions/`, `validator.cpp` at the root
-- [ ] All generator files compile: `g++ -O2 -I. generators/gen_edge.cpp -o build/gen_edge` etc.
-- [ ] `validator.cpp` reads input in exact format; checks per-group constraints
-- [ ] Hand-crafted tests exist in `stK/` directories for each subtask K
-- [ ] All hand-crafted tests pass the validator
-- [ ] `script.txt` uses `@N` group markers and lists **every** test — hand-crafted ones via `gen_manual`, placed inside their subtask's block so grouping is automatic; nothing is uploaded as a Polygon manual test
-- [ ] `gen_manual` reproduces each `stK/xx` file byte-for-byte (asserted, not assumed)
-- [ ] No two lines in `script.txt` share the same generator+arguments — every repeated call has a distinct trailing seed
-- [ ] `gen_random` clamps m to `max(n-1, atoi(argv[...]))` so seed suffixes never produce an invalid edge count
-- [ ] `gen_special` subtypes each encode a distinct structural shape
-- [ ] `gen_stress` caps N well below subtask 1's limit for fast brute runs
-- [ ] `solutions/brute.cpp` gives correct output; passes subtask 1 (and maybe 2)
-- [ ] `solutions/sol_st1.cpp` exists and passes ONLY subtask 1; comment explains why it fails subtask 2+
-- [ ] `solutions/sol_st1_2.cpp` exists and passes ONLY subtasks 1–2; comment explains failure mode
-- [ ] `solutions/sol_st1_2_3.cpp` exists if ≥4 subtasks; comment explains failure mode
-- [ ] 3–4 `wa_*.cpp` files with "Fails on:" and "To expose:" comment headers
-- [ ] 1–2 `tle_*.cpp` files with "TLEs on:" header
-- [ ] Every solution has a Polygon tag derived from its **observed** verdict mix (Step 9.5), not from reading the source; any mixed WA+TLE file is tagged `Incorrect`
-- [ ] `UPLOAD.md` written with REAL file names and tags, explicit UPLOAD / PASTE / DO NOT UPLOAD actions, and a statement that NO test data is uploaded by hand
-- [ ] Graph/tree generators: edges shuffled or reverse-topological — never bare sequential
-- [ ] Every adversarial/special generator guarantees reachability or is intentionally testing the -1 case
-- [ ] Constraints in all generators match the subtask table exactly
+- [reference/templates.md](reference/templates.md): full generator, ladder, wrong/TLE, and validator templates
+- [reference/patterns.md](reference/patterns.md): problem-type heuristics and common wrong/TLE approaches
+- [reference/polygon-tags.md](reference/polygon-tags.md): tag semantics and the empirical classification snippet
+- [reference/upload-checklist.md](reference/upload-checklist.md): required sections of `UPLOAD.md`
+- [scripts/stress.sh](scripts/stress.sh), [scripts/check_manual.sh](scripts/check_manual.sh), [scripts/check_solution.sh](scripts/check_solution.sh): local verification

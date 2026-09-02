@@ -1,48 +1,39 @@
 ---
 name: polygon-test-generator
-description: Generate Codeforces Polygon-compatible test data from a competitive programming problem statement and solutions. Produces multiple testlib.h-based generator files (gen_edge.cpp, gen_random.cpp, gen_adversarial.cpp), validator.cpp, hand-crafted test files, a Polygon test script, and wrong/TLE solutions for stress testing. Always use this skill when the user wants to create test cases for a CP problem on Codeforces Polygon, mentions "gen.cpp", "testlib", "polygon tests", "stress test", or provides a problem statement with a model solution and asks to generate test data. Invoke even if the user just says "generate tests" or "make test cases" for a competitive programming problem.
+description: Generate Codeforces Polygon test data from a competitive programming problem statement and its solutions, producing testlib.h generators (edge, random, special, stress, adversarial), a validator, hand-crafted tests, a Polygon test script, and brute/wrong/TLE solutions for local stress testing. Use when the user wants test cases for a CP problem on Polygon with plain all-or-nothing scoring (no subtasks, no per-test scores).
+when_to_use: Trigger phrases include "generate tests", "make test cases", "gen.cpp", "testlib", "polygon tests", "stress test", or a problem statement plus a model solution with a request for test data. For subtask/partial scoring use polygon-test-generator-ioi; for cafe-grader per-test scoring use polygon-test-generator-cafe.
 ---
 
 # Polygon Test Generator
 
-Generate Codeforces Polygon-compatible test data from a problem statement (Markdown or LaTeX) and provided solutions.
+Produce a complete, verified Polygon test package from a problem statement (Markdown or LaTeX) and the provided solutions. Work through the steps in order; each later step depends on the constraints and solution roles established in Steps 1 and 2.
 
-## What You Produce
+Keep the user informed: say what you are about to do before starting, give a one-line update as each stage completes (generators written, solutions written, stress test result), and close with a recap that lists every produced file and any local verification that failed or was skipped. Deliver the whole package in one pass; if a part cannot be produced (for example, a custom checker), say so in the recap rather than stopping early.
+
+## What you produce
 
 | File | Upload destination in Polygon |
 |------|-------------------------------|
-| `gen_edge.cpp` | Files → Source Files (generator) |
-| `gen_random.cpp` | Files → Source Files (generator) |
-| `gen_adversarial.cpp` | Files → Source Files (generator) |
-| `gen_special.cpp` | Files → Source Files (generator) |
-| `gen_stress.cpp` | Files → Source Files (generator) |
+| `gen_edge.cpp`, `gen_random.cpp`, `gen_special.cpp`, `gen_stress.cpp`, `gen_adversarial.cpp` | Files → Source Files (generator) |
 | `validator.cpp` | Files → Source Files (validator) |
 | `01`, `02`, `03`, … | Tests → Add Test (manual) |
-| `script.txt` | Tests → Test Script (copy-paste) |
-| `brute.cpp` | Local stress testing only (not Polygon) |
-| `wa_*.cpp` | Local hack testing only (not Polygon) |
-| `tle_*.cpp` | Local hack testing only (not Polygon) |
+| `script.txt` | Tests → Test Script (paste) |
+| `brute.cpp`, `wa_*.cpp`, `tle_*.cpp` | Local stress and hack testing only, not uploaded |
 
-`testlib.h` is pre-available in Polygon — do not upload it. For local testing:
-`https://raw.githubusercontent.com/MikeMirzayanov/testlib/refs/heads/master/testlib.h`
+`testlib.h` is already available in Polygon, so it is not uploaded. For local compilation download it from
+`https://raw.githubusercontent.com/MikeMirzayanov/testlib/refs/heads/master/testlib.h`.
 
----
+## Step 1 — Parse the problem statement
 
-## Step 1 — Parse the Problem Statement
+Extract:
 
-Read the statement carefully (Markdown or LaTeX). Extract:
+- **Input format**: variable names, structure, exact reading order.
+- **Constraints**: every bound (N ≤ ?, 1 ≤ aᵢ ≤ ?, …).
+- **Multiple test cases**: if the first line is T, every generator wraps its output in T cases.
+- **Output spec**: decide whether the answer is unique. A custom checker is needed when several outputs are valid (printing a path, assignment, or permutation rather than its cost; any-valid-answer constructive problems; floating point with tolerance). Note that a checker is needed but do not write one; it is too problem-specific for this skill.
+- **Problem type**: match against [reference/patterns.md](reference/patterns.md) to pick edge and adversarial shapes.
 
-- **Input format**: variable names, structure, exact reading order
-- **Constraints**: every bound (N ≤ ?, 1 ≤ aᵢ ≤ ?, etc.)
-- **Multiple test cases?** If the first line is T, note it — handle T-wrapping in all generators
-- **Output spec**: unique answer, any valid answer, yes/no, floating point — decide if the answer is unique. A **custom checker** is needed whenever multiple outputs are valid: printing an actual path/assignment/permutation (not just its cost), any-valid-answer constructive problems, floating point with tolerance. If a checker is needed, note it but don't generate it — it's too problem-specific. For the rest of this skill, assume the checker question is already settled.
-- **Problem type**: see heuristics table at the end
-
----
-
-## Step 2 — Classify Solutions
-
-Identify every provided file by name and content:
+## Step 2 — Classify the provided solutions
 
 | Role | Common names |
 |------|-------------|
@@ -50,13 +41,11 @@ Identify every provided file by name and content:
 | Brute force (slow but correct) | `brute`, `slow`, `naive`, `bf`, `n2`, `n3` |
 | Wrong solutions (intentionally bad) | `wa`, `tle`, `mle`, `wrong`, `hack`, `bad` |
 
-Wrong solutions tell you what the test suite must catch. If no brute force is provided, write one (see Step 6).
+Wrong solutions tell you what the test suite has to catch. If no brute force is provided, write one in Step 4.
 
----
+## Step 3 — Write the generators
 
-## Step 3 — Write gen_edge.cpp
-
-Generates deterministic edge and corner cases. Takes a single `subtype` argument.
+All five generators share one skeleton. Full per-generator templates with comment scaffolds are in [reference/templates.md](reference/templates.md).
 
 ```cpp
 #include "testlib.h"
@@ -69,244 +58,55 @@ const int MAXVAL = /* from problem */;
 
 int main(int argc, char* argv[]) {
     registerGen(argc, argv, 1);
-    int subtype = argc > 1 ? atoi(argv[1]) : 0;
-
-    // subtype 0: N = 1 (minimum)
-    // subtype 1: N = MAXN, all values = MINVAL
-    // subtype 2: N = MAXN, all values = MAXVAL
-    // subtype 3: N = MAXN, sorted ascending
-    // subtype 4: N = MAXN, sorted descending
-    // subtype 5: N = MAXN, all values identical (random value)
-    // + problem-specific edges (see heuristics)
-    
-    // generate and print...
+    int arg = argc > 1 ? atoi(argv[1]) : 0;   // subtype, or n for gen_random / gen_stress
+    // build the input, then print it in the exact input format
     return 0;
 }
 ```
 
-Use `rnd.next(lo, hi)` even for "deterministic" cases that need a random value within a fixed structural pattern — this keeps tests reproducible via the seed baked into `registerGen`.
+| Generator | Argument | Produces |
+|-----------|----------|----------|
+| `gen_edge` | `subtype` | Deterministic corner cases: N=1; N=MAXN with all MINVAL, all MAXVAL, sorted ascending, sorted descending, all identical; then problem-specific edges from the patterns table |
+| `gen_random` | `n` (random in range when omitted) | Uniform random inputs across the constraint range; graph inputs start from a spanning tree so node N is reachable |
+| `gen_special` | `subtype` | 4–6 structural shapes, each a distinct mathematical structure rather than a size variant (bamboo, star, caterpillar; palindromes, period-2 strings; all-prime, powers of 2; bipartite, grid; cyclic-shift or bitonic permutations). These target the algebraic structure a solution depends on, which neither size-based edges nor adversarial cases cover |
+| `gen_stress` | `n` (random ≤ STRESS_MAXN when omitted) | Tiny inputs (STRESS_MAXN ≈ 10–20, whatever `brute` solves in under 50 ms) so the Step 8 stress loop can run thousands of cases without shrinking N by hand |
+| `gen_adversarial` | `subtype` | Maximum-N inputs built to break naive solutions: the O(N²) killer, the anti-greedy counter-example, the problem-specific worst case. Aim each subtype at a specific `wa_*` or `tle_*` solution |
 
----
+Rules that are easy to get wrong:
 
-## Step 4 — Write gen_random.cpp
+- **Random values come from testlib's `rnd`** (`rnd.next(lo, hi)`), even inside an otherwise deterministic pattern. `registerGen` seeds `rnd` from the full argv, so every test stays reproducible.
+- **Seeding**: because the seed is derived from all arguments, `gen_random 100000 1` and `gen_random 100000 2` give different tests while two identical lines give identical tests. Every repeated call in `script.txt` needs a distinct trailing token. Generators that never call `rnd` are fully deterministic, so call each of their subtypes once.
+- **Seed vs. m collision**: if `gen_random` reads `argv[2]` as an edge count `m`, a trailing seed like `gen_random 10 2` would set m=2 while the spanning tree alone needs 9 edges, and the validator would reject the file. Clamp with `m = max(n - 1, atoi(argv[2]))` so the seed still varies the RNG and m is always legal; explicit large-m calls such as `gen_random 100000 200000 3` keep working.
+- **Edge order in graph generators**: printing edges in chain, BFS, or spanning-tree order can neuter an adversarial case. Bellman-Ford, for instance, finishes in one pass when edges arrive in topological order. Shuffle edges with testlib's `shuffle(edges.begin(), edges.end())` or print a bamboo in reverse (`for (i = n-1; i >= 1; --i)`).
+- **Reachability**: `gen_adversarial` and `gen_special` do not build a spanning tree automatically. If the problem never outputs −1, every subtype has to guarantee the required reachability. If −1 is a legal answer, include one intentionally disconnected case and confirm the others are connected by checking that `./sol` does not print −1 unexpectedly.
+- **Verify the TLE**: after writing an adversarial generator, run `timeout <TL> ./tle_x < input`. If it exits 0, the ordering or structure is accidentally easy and the generator needs fixing.
 
-Generates fully random tests across the constraint range. Takes `n` (or range bounds) as argument.
+## Step 4 — Write brute, wrong, and TLE solutions
 
-```cpp
-#include "testlib.h"
-#include <bits/stdc++.h>
-using namespace std;
+These stay local; they prove the tests do their job. Templates and comment-header conventions are in [reference/templates.md](reference/templates.md); common wrong and slow approaches per problem type are in [reference/patterns.md](reference/patterns.md).
 
-const int MAXN   = /* from problem */;
-const int MINVAL = /* from problem */;
-const int MAXVAL = /* from problem */;
+- **`brute.cpp`**: the simplest obviously-correct solution, complexity irrelevant. O(N²) or O(N³) scans, Floyd–Warshall, exponential DFS, and O(N²) substring checks are all fine.
+- **`wa_*.cpp`** (3–4 files): each implements a *different* wrong approach, so the suite is tested against several failure modes rather than one. Sources: greedy without lookahead, DP with a wrong base case or transition, mishandled edge cases (N=1, empty input, overflow), correct on random input but wrong on a specific structure, correct algorithm with an implementation slip (binary-search off-by-one, modular arithmetic). Name them by mistake: `wa_greedy.cpp`, `wa_overflow.cpp`, …
+- **`tle_*.cpp`** (1–2 files): correct logic, too-high complexity, the kind a contestant would actually submit: O(N² log N) where O(N log N) is required, an extra loop in a DP, `std::set` in a tight inner loop, rebuilding adjacency per query. They differ from `brute` in intent: `brute` checks correctness, `tle_*` checks that the large tests are actually stressful.
 
-int main(int argc, char* argv[]) {
-    registerGen(argc, argv, 1);
-    int n = argc > 1 ? atoi(argv[1]) : rnd.next(1, MAXN);
-
-    // generate n, then generate n random values/edges/characters etc.
-    // print in exact input format
-    return 0;
-}
-```
-
-In the test script, call it with different `n` values. To get multiple distinct tests at the same size, append a different trailing integer — `registerGen(argc, argv, 1)` seeds the RNG from **all** argv, so `gen_random 100000 1` and `gen_random 100000 2` produce completely different tests.
-
-**Seed-vs-m collision:** if gen_random reads `argv[2]` as `m`, a trailing seed like `gen_random 10 2` will be parsed as n=10, m=2 — but the spanning tree alone needs n−1=9 edges, so the header would say m=2 while 9 lines follow, failing the validator. Fix this in the generator by clamping: `m = max(n - 1, atoi(argv[2]))`. This way the seed still changes the RNG while m is always legal, and explicit large-m calls (e.g. `gen_random 100000 200000 3`) work unchanged because 200000 ≥ n−1.
-
----
-
-## Step 5 — Write gen_special.cpp
-
-Generates problem-specific structural inputs that don't fit the generic edge/adversarial categories. Think about what *shapes* of input are mathematically meaningful for this problem — things that stress a particular property of the data rather than just "max size" or "sorted order".
+Every bad solution starts with a header that ties it to the tests that expose it:
 
 ```cpp
-#include "testlib.h"
-#include <bits/stdc++.h>
-using namespace std;
-
-int main(int argc, char* argv[]) {
-    registerGen(argc, argv, 1);
-    int subtype = argc > 1 ? atoi(argv[1]) : 0;
-
-    // Examples (pick the ones relevant to the problem):
-    // Trees:        complete binary tree, star, bamboo, Fibonacci-heavy-path, caterpillar
-    // Strings:      all-distinct chars, pure palindrome, period-2 pattern, Thue-Morse sequence
-    // Numbers:      all prime, all powers of 2, all Fibonacci, arithmetic progression
-    // Graphs:       bipartite, complete bipartite, clique + isolated vertices, grid graph
-    // Permutations: cyclic shift by K, bitonic (up then down), many fixed points
-
-    return 0;
-}
-```
-
-**Why this matters:** `gen_edge` covers generic bounds and `gen_adversarial` covers worst-case sizes, but neither targets the *algebraic/combinatorial structure* that many problem solutions depend on. A segment-tree solution might be fine on sorted input but break on a specific permutation pattern; a string DP might be fine on random text but explode on a period-2 string.
-
-Aim for 4–6 subtypes. Each subtype should encode a distinct mathematical structure, not just a variation in size.
-
----
-
-## Step 5b — Write gen_stress.cpp
-
-Generates small-scale inputs (tiny N) specifically for stress testing against `brute.cpp`. These are not about finding bugs via structure — they're about volume: run thousands of small random cases so the probability of hitting any bug approaches 1.
-
-```cpp
-#include "testlib.h"
-#include <bits/stdc++.h>
-using namespace std;
-
-const int STRESS_MAXN = /* something brute handles in <50ms, e.g. 10–20 */;
-const int MINVAL = /* from problem */;
-const int MAXVAL = /* from problem */;
-
-int main(int argc, char* argv[]) {
-    registerGen(argc, argv, 1);
-    int n = argc > 1 ? atoi(argv[1]) : rnd.next(1, STRESS_MAXN);
-
-    // Generate a small random valid input — same structure as gen_random
-    // but capped at STRESS_MAXN so the brute runs instantly.
-    return 0;
-}
-```
-
-**Why separate from gen_random?** `gen_random` targets the full constraint range (large N). Using it for stress testing means either running brute on huge inputs (too slow) or manually shrinking N each time (error-prone). `gen_stress` bakes the small-N constraint in so the stress loop just calls `./gen_stress > test.in` with no extra arguments.
-
----
-
-## Step 6 — Write gen_adversarial.cpp
-
-Generates worst-case inputs designed to break naive solutions. Takes a `subtype` argument.
-
-```cpp
-#include "testlib.h"
-#include <bits/stdc++.h>
-using namespace std;
-
-const int MAXN = /* from problem */;
-
-int main(int argc, char* argv[]) {
-    registerGen(argc, argv, 1);
-    int subtype = argc > 1 ? atoi(argv[1]) : 0;
-
-    // Always use maximum N.
-    // subtype 0: worst case for O(N²) naive — e.g. sorted ascending
-    // subtype 1: worst case for greedy — carefully constructed counter-example
-    // subtype 2: problem-specific — e.g. bamboo tree, star graph, all-'a' string
-    // ...
-
-    return 0;
-}
-```
-
-See the heuristics table for what adversarial cases to generate per problem type. Think about what the **wrong/TLE solutions** would fail on and target those.
-
-### Edge ordering in graph generators
-
-For graph and tree problems, **the order edges are printed can silently neuter an adversarial test.** Bellman-Ford, for example, degrades from O(NM) to O(M) when edges happen to be in topological order — one pass relaxes every node at once, so it finishes in milliseconds on a case intended to TLE it.
-
-Rule: whenever a graph generator prints edges in a structured sequence (chain 1→2→3→…→N, BFS/DFS order, spanning tree order), either shuffle them or print them in reverse:
-
-```cpp
-// Option A — shuffle with rnd so the order is reproducible but non-topological
-shuffle(edges.begin(), edges.end());
-for (auto [u, v] : edges) cout << u << " " << v << " " << w << "\n";
-
-// Option B — reverse order for a bamboo (forces N-1 Bellman-Ford rounds)
-for (int i = n - 1; i >= 1; i--)
-    cout << i << " " << (i + 1) << " " << w << "\n";
-```
-
-After writing any adversarial generator, verify the TLE solution actually TLEs:
-
-```bash
-timeout 3 ./tle_solution < adversarial_input && echo "FAIL: did not TLE" || echo "OK: TLE confirmed"
-```
-
-If it finishes in time, the generator is producing an accidentally easy ordering.
-
-### Connectivity and reachability
-
-`gen_random` always builds a spanning tree first, so node N is reachable. `gen_adversarial` and `gen_special` have no such guarantee — you must enforce reachability explicitly, or you'll produce accidental -1 tests.
-
-- **If the problem can output -1** (unreachable / impossible): include at least one disconnected adversarial case intentionally, and verify your other cases are connected by checking the output of `./sol` is not -1 unexpectedly.
-- **If the problem never outputs -1** (always a path exists): every generator must guarantee reachability. For chain/bamboo generators this is automatic; for generators that add edges randomly, start from a spanning tree as gen_random does before adding extra edges.
-
----
-
-## Step 7 — Write Wrong/TLE Solutions
-
-Always produce at least four "bad" solutions for stress testing. These are not uploaded to Polygon — they're for local correctness and performance verification.
-
-### brute.cpp
-Write a simple, obviously-correct but slow solution. Aim for the simplest possible approach regardless of complexity. Correctness is the only goal here — complexity doesn't matter.
-
-- For sequence problems: O(N²) or O(N³) scan
-- For graph problems: Floyd-Warshall or exponential DFS
-- For string problems: O(N²) substring check
-
-```cpp
-// brute.cpp — O(?) brute force, correct but slow
-// Use for stress testing: diff <(./sol < test) <(./brute < test)
-#include <bits/stdc++.h>
-using namespace std;
-int main() {
-    // simplest possible correct implementation
-}
-```
-
-### wa_*.cpp — Wrong Answer Solutions (3–4 files)
-
-Write 3–4 solutions that each implement a *distinct* common wrong approach for this problem type. Variety matters: if all your WA solutions fail on the same class of input, you're only testing one thing. Cover different failure modes.
-
-Good sources for wrong approaches:
-- A greedy that picks locally optimal without lookahead
-- A DP with wrong base case or transition
-- An approach that mishandles edge cases (empty input, N=1, overflow)
-- A solution that's correct on random inputs but wrong on a specific structure (all-equal values, sorted/reverse, graph with multiple components)
-- Correct algorithm, wrong implementation detail (e.g., off-by-one in binary search, wrong modular arithmetic)
-
-Name clearly: `wa_greedy.cpp`, `wa_dp.cpp`, `wa_overflow.cpp`, `wa_edge.cpp`, etc.
-
-```cpp
-// wa_greedy.cpp — WRONG: [describe the mistake in one line]
-// Fails on: [describe what kind of input breaks it]
+// wa_greedy.cpp — WRONG: [the mistake in one line]
+// Fails on: [what kind of input breaks it]
 // To expose: gen_special 2 or gen_edge 5
-#include <bits/stdc++.h>
-using namespace std;
-int main() {
-    // wrong implementation
-}
 ```
-
-The comment headers are important — they establish a direct contract between the wrong solution and the test cases that must exist to catch it. Add a "To expose:" line pointing to which generator subtype will produce the failing input.
-
-### tle_*.cpp — TLE Solutions (1–2 files)
-
-Write 1–2 solutions with **correct logic but too-high complexity** — the kind of solution a contestant might actually submit thinking it's fast enough. These differ from `brute.cpp` in intent: `brute` is for stress-testing correctness; `tle` solutions model realistic contestant mistakes.
-
-Good TLE candidates:
-- O(N² log N) when the correct bound requires O(N log N)
-- O(N · sqrt(N)) when O(N log N) is needed
-- A correct DP with an extra unneeded loop that multiplies complexity by N
-- Using `std::set`/`std::map` operations in a tight inner loop when a hash-map or sorted array suffices
-- Correct BFS/DFS but rebuilding the adjacency list on every call
 
 ```cpp
-// tle_n2.cpp — CORRECT but O(N²): [describe the approach]
+// tle_n2.cpp — CORRECT but O(N²): [the approach]
 // TLEs on: N ≥ [threshold] — triggers with gen_adversarial 0 or gen_random MAXN
-#include <bits/stdc++.h>
-using namespace std;
-int main() {
-    // correct but slow implementation
-}
 ```
 
-**Why write TLE solutions?** They confirm your large-N test cases are actually stressful — if a TLE solution passes all your Polygon tests, your test suite has a gap.
+The "To expose" and "TLEs on" lines are a contract: the named generator subtype has to exist and has to make that solution fail.
 
----
+## Step 5 — Write validator.cpp
 
-## Step 8 — Write validator.cpp
+The validator is the canonical definition of a valid input, so it reads the input exactly as the statement specifies, including spaces and newlines.
 
 ```cpp
 #include "testlib.h"
@@ -314,52 +114,30 @@ using namespace std;
 
 int main(int argc, char* argv[]) {
     registerValidation(argc, argv);
-
-    // Read input exactly as the problem specifies.
-    // Key methods:
-    //   inf.readInt(lo, hi, "name")      — integer with bounds check
-    //   inf.readLong(lo, hi, "name")     — long long
-    //   inf.readToken("[a-z]+", "name")  — string matching regex
-    //   inf.readSpace()                  — assert ' '
-    //   inf.readEoln()                   — assert '\n'
-    //   inf.readEof()                    — assert end of file
-
+    // inf.readInt(lo, hi, "name")      integer with bounds check
+    // inf.readLong(lo, hi, "name")     long long
+    // inf.readToken("[a-z]+", "name")  token matching a regex
+    // inf.readSpace()  inf.readEoln()  inf.readEof()
     return 0;
 }
 ```
 
-The validator is the canonical spec of valid input — write it carefully. For graphs, check no self-loops, no parallel edges, and optionally connectivity (Union-Find).
+For graphs, check for self-loops and parallel edges, and check connectivity with union-find when the statement guarantees it.
 
----
+## Step 6 — Hand-crafted tests
 
-## Step 9 — Hand-crafted Test Files
+Write at least three static files, named without extension:
 
-Write 3+ static test files for critical deterministic cases (name without extension):
+- `01`: minimum valid input (N=1 or the simplest case).
+- `02`: maximum N, all maximum values.
+- `03`: maximum N, all minimum values.
+- More when the problem has must-have deterministic cases.
 
-- `01` — minimum valid input (N=1 or simplest possible)
-- `02` — maximum N, all maximum values
-- `03` — maximum N, all minimum values
-- More if the problem has problem-specific must-have cases
+Run each one through the validator before packaging.
 
----
+## Step 7 — Test script (script.txt)
 
-## Step 10 — Test Script (script.txt)
-
-### Seeding rule — read this first
-
-`registerGen(argc, argv, 1)` seeds the RNG from **all** command-line arguments concatenated. Two script lines with identical arguments run the generator with the same seed and produce **identical tests**. To get distinct outputs, append a different trailing token (an integer or short string) to each repeated call:
-
-```
-gen_random 100000 1 > $   # seed differs from line below
-gen_random 100000 2 > $   # different output, same n
-gen_random 100000 3 > $   # different output again
-```
-
-The generator doesn't need to read `argv[2]` — testlib uses it purely for seeding. This rule applies to every generator in the script. **Never repeat the same `generator args` on two lines without a distinct trailing seed.**
-
-Generators that produce fully deterministic output (never call `rnd`) are immune — adding extra args changes nothing since `rnd` is never used — so call them only once per subtype.
-
-### Example script
+Every repeated generator call carries a distinct trailing seed token (Step 3). Deterministic generators are called once per subtype.
 
 ```
 gen_edge 0 > $
@@ -387,101 +165,32 @@ gen_adversarial 2 1 > $
 gen_adversarial 2 2 > $
 ```
 
-Adjust the number of `gen_special` and `gen_adversarial` calls to match the subtypes you actually implemented.
+Match the `gen_special` and `gen_adversarial` lines to the subtypes actually implemented, and replace `MAXN` with the real bound.
 
----
+## Step 8 — Local stress test
 
-## Step 11 — Local Stress Test Script
+Copy [scripts/stress.sh](scripts/stress.sh) next to the sources and run it whenever a brute force exists. It compiles `gen_stress`, the model solution, and `brute` with `$CXX` (default `g++`; on macOS set `CXX` to a GNU compiler such as `g++-15`, because Apple's `g++` is clang and lacks `bits/stdc++.h`), runs 1000 iterations with the iteration number as the seed (so every iteration is a different test), and stops at the first difference. It uses `gen_stress` rather than `gen_random` so the brute force keeps up.
 
-Provide this if a brute force exists (provided or generated):
+Also run each `wa_*` and `tle_*` solution over the generated tests and confirm it fails where its header says it should.
 
-```bash
-g++ -O2 -std=c++17 -o gen_stress   gen_stress.cpp
-g++ -O2 -std=c++17 -o sol          solution.cpp
-g++ -O2 -std=c++17 -o brute        brute.cpp
+## Final checklist
 
-for i in $(seq 1 1000); do
-    ./gen_stress > test.in
-    ./sol   < test.in > out_sol.txt
-    ./brute < test.in > out_brute.txt
-    if ! diff -q out_sol.txt out_brute.txt > /dev/null 2>&1; then
-        echo "DIFFERENCE on iteration $i"
-        cat test.in
-        echo "--- sol ---"; cat out_sol.txt
-        echo "--- brute ---"; cat out_brute.txt
-        break
-    fi
-done
-echo "Stress test done."
-```
-
-Use `gen_stress` (not `gen_random`) for stress testing so brute force can keep up. Run more iterations (1000+) since each case is tiny and fast.
-
----
-
-## Problem-Type Heuristics
-
-| Type | Signals | Edge subtypes | Adversarial subtypes |
-|------|---------|--------------|----------------------|
-| Array/sequence | "N integers", "sequence" | min/max/sorted/reverse/all-equal | sorted asc (breaks O(N²)), all-equal |
-| Permutation | "permutation of 1..N" | identity, reverse, random | cyclic shift, reverse |
-| Graph | "N nodes M edges" | N=2, tree (M=N-1), complete (M=N*(N-1)/2), star | star, path/chain, bipartite |
-| Tree | "N nodes, N-1 edges" | N=2, chain (bamboo), star, single path | bamboo (depth=N, breaks recursion), star |
-| String | "string of length N" | N=1, all 'a', all 'z', alternating "ab…", full palindrome | all 'a' (max palindromic partitions), "abababab…" |
-| Grid | "N×M grid" | 1×M, N×1, checkerboard, all same | all same char, checkerboard |
-| Geometry | "N points" | N=1, all collinear, convex hull | collinear (breaks some convex hull), all same point |
-| Multiple T-cases | "first line T" | max T min-N cases; one max-N single case | max T, each case adversarial |
-
-For **tree** problems: always include bamboo (chain of N nodes). Recursive solutions that don't iteratively DFS will stack-overflow on this.
-
-For **graph** problems: always include a path graph and a star. If M allows it, include a near-complete graph.
-
----
-
-## Common Wrong/TLE Solution Patterns
-
-### Wrong Answer patterns (wa_*.cpp)
-
-| Problem type | Common wrong approach | Breaks on |
-|-------------|----------------------|-----------|
-| Sorting/searching | Greedy picks local minimum without lookahead | Carefully constructed anti-greedy input |
-| DP | Wrong base case (dp[0]=1 when it should be 0) | Small inputs near the base case |
-| Graph shortest path | BFS on weighted graph (correct for unit weights only) | Graph with varying edge weights |
-| MST | Always picking cheapest edge from node 1 (wrong Prim) | Non-trivial MST structure |
-| String | Not handling overlapping patterns, off-by-one in indices | Strings with many overlapping occurrences |
-| Geometry | Not handling collinear/degenerate cases | All-collinear point sets |
-| Counting | Forgetting modular arithmetic, overflow with int instead of long long | Large values near INT_MAX |
-| Graph/Tree | Assuming connected input without checking | Disconnected graph |
-| Binary search | Wrong predicate direction or off-by-one in lo/hi | Boundary answer at lo or hi |
-
-### TLE patterns (tle_*.cpp)
-
-| Problem type | TLE approach | Correct complexity | TLE complexity |
-|-------------|-------------|-------------------|----------------|
-| Sequence queries | Recompute from scratch for each query | O(N + Q) with prefix sums | O(N·Q) |
-| Sorting-based | Insertion sort or selection sort | O(N log N) | O(N²) |
-| Graph BFS/DFS | Rebuild adjacency list every call | O(N + M) once | O(N·(N + M)) |
-| String matching | Naive double loop | O(N) KMP/Z-function | O(N²) |
-| DP with transitions | Extra loop over all states for each transition | O(N log N) with monotone deque | O(N²) |
-| Segment tree | Iterate all elements for range query | O(log N) per query | O(N) per query |
-| Number theory | Trial division in inner loop | O(sqrt(N)) per number | O(N) per number |
-
----
-
-## Final Checklist
-
-- [ ] All five generator files compile: `g++ -O2 gen_edge.cpp -o gen_edge` etc.
-- [ ] `validator.cpp` reads input in exact format — no extra/missing spaces or newlines
+- [ ] All five generators compile (`g++ -O2 -std=c++17 gen_edge.cpp -o gen_edge`, etc.)
+- [ ] `validator.cpp` reads the input in the exact format, with no extra or missing whitespace
 - [ ] Hand-crafted tests `01`, `02`, `03` pass the validator
-- [ ] `script.txt` references `gen_edge`, `gen_random`, `gen_adversarial`, `gen_special` (not bare `gen`)
-- [ ] No two lines in `script.txt` share the same generator name + arguments — every repeated call has a distinct trailing seed integer (e.g., `gen_random 100000 1`, `gen_random 100000 2`)
-- [ ] `gen_random` clamps m to `max(n-1, atoi(argv[2]))` so seed suffixes never produce an invalid edge count in the header
-- [ ] `gen_special` subtypes each encode a distinct structural shape, not just a size variation
-- [ ] `gen_stress` caps N at a value brute handles in under 50ms
-- [ ] `brute.cpp` gives correct output but is slow enough to need stress testing
-- [ ] 3–4 `wa_*.cpp` files — each targets a distinct failure mode, has "Fails on:" and "To expose:" comment headers
-- [ ] 1–2 `tle_*.cpp` files — correct logic, wrong complexity; "TLEs on:" header says what input triggers it
-- [ ] Each TLE solution verified locally: `timeout <TL> ./tle_x < adversarial_input` exits non-zero
-- [ ] Graph/tree generators: edges are shuffled with `rnd` or printed in reverse topological order — never bare sequential order
-- [ ] Every `gen_adversarial` and `gen_special` subtype either guarantees node N is reachable or is intentionally testing the -1 case
-- [ ] Constraints in all generator files match the problem statement exactly
+- [ ] `script.txt` uses the real generator names (`gen_edge`, `gen_random`, `gen_special`, `gen_adversarial`), not a bare `gen`
+- [ ] No two `script.txt` lines share a generator and argument list; repeated calls differ by a trailing seed
+- [ ] `gen_random` clamps m to `max(n - 1, atoi(argv[2]))`
+- [ ] `gen_special` subtypes are distinct structures, not size variants
+- [ ] `gen_stress` caps N at a size `brute` solves in under 50 ms
+- [ ] `brute.cpp` is correct; 3–4 `wa_*.cpp` with distinct failure modes and "Fails on" / "To expose" headers; 1–2 `tle_*.cpp` with a "TLEs on" header
+- [ ] Each `tle_*` verified locally: `timeout <TL> ./tle_x < adversarial_input` exits non-zero
+- [ ] Graph and tree generators shuffle edges or print them in reverse topological order
+- [ ] Every adversarial and special subtype either guarantees reachability or is a deliberate −1 case
+- [ ] Constraints in every generator match the statement exactly
+
+## Additional resources
+
+- [reference/templates.md](reference/templates.md): full generator, solution, and validator templates with comment scaffolds
+- [reference/patterns.md](reference/patterns.md): problem-type heuristics and common wrong/TLE approaches
+- [scripts/stress.sh](scripts/stress.sh): the local stress loop
