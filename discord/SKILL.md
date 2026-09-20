@@ -8,6 +8,21 @@ when_to_use: Trigger phrases include "send a Discord message", "post this to Dis
 
 The `discord@claude-plugins-official` plugin is intentionally disabled: its MCP server keeps a persistent Bun process with a live Discord gateway connection, which drains laptop battery. Leave it disabled and use the helper script instead. Each call is a single REST request that reads the bot token from `~/.claude/channels/discord/.env` and exits immediately.
 
+## Channel is required
+
+If the request does not name a channel, stop and ask which one. Do not run any `discordctl.sh` command before the answer — not even a read.
+
+This holds even when the request looks like it locates itself:
+
+- **a message ID** — `read` takes a channel ID, and there is no way to resolve a channel from a message ID, so a message ID alone is not a channel
+- a username, a topic, "that channel", "the usual one"
+
+Never infer the channel from past transcripts, shell history, or an ID used earlier. A wrong guess reads a channel the user never pointed at, and its contents are then in context for the rest of the session.
+
+## Stay inside the channel you were given
+
+Build the reply, summary, or post only from the channel named in the request, and only from the range asked for. Do not quote, cite, or lean on messages from another channel, or from older history in the same channel outside that range — people in one channel did not agree to be quoted into another. If outside material seems relevant, ask before using it.
+
 ## Commands
 
 Send a plain message:
