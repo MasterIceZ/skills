@@ -40,6 +40,26 @@ resolve_channel() { # accepts a channel ID, or a user ID (opens a DM)
   fi
 }
 
+# jq program for `read`. A forwarded message carries flag 1<<14 (HAS_SNAPSHOT) and an
+# empty .content — the text lives in .message_snapshots[].message, so render that too.
+READ_JQ='
+def render:
+  [ (.content // "") ]
+  + ((.attachments // []) | map("<attachment: \(.filename) — \(.url)>"))
+  + ((.embeds // []) | map("<embed: \(.title // .url // .type // "?")>"))
+  | map(select(. != "")) | join("\n");
+
+def indent($p): split("\n") | map($p + .) | join("\n");
+
+if type != "array" then "error: \(.message // .)"
+else reverse | .[] | . as $m
+  | ($m | render) as $own
+  | (($m.message_snapshots // []) | map(.message | render | indent("> ")) | join("\n")) as $fwd
+  | ([$own, $fwd] | map(select(. != "")) | join("\n")) as $all
+  | "[\($m.timestamp[0:16])] \($m.author.username):"
+    + (if $all == "" then " (no readable content)" else "\n" + ($all | indent("  ")) end)
+end'
+
 cmd=${1:-}; shift || true
 case "$cmd" in
   send)
@@ -58,10 +78,7 @@ case "$cmd" in
   read)
     id=$1; limit=${2:-10}
     ch=$(resolve_channel "$id")
-    api GET "/channels/$ch/messages?limit=$limit" \
-      | jq -r 'if type == "array" then reverse | .[] |
-          "[\(.timestamp[0:16])] \(.author.username): \(.content)\(if (.attachments | length) > 0 then " <\(.attachments | length) attachment(s)>" else "" end)"
-        else "error: \(.message // .)" end'
+    api GET "/channels/$ch/messages?limit=$limit" | jq -r "$READ_JQ"
     ;;
   *)
     echo "usage: $(basename "$0") send <id> <message...> | embed <id> <title> <description...> | read <id> [limit]" >&2

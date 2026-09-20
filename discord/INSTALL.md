@@ -55,7 +55,7 @@ Execute in order. Step 4 requires a secret only the user can provide — if the 
    ~/.claude/channels/discord/discordctl.sh read <channel-or-user-id> 3
    ```
 
-   Expected: up to 3 message lines like `[2026-08-16T07:05] username: text`. See "Troubleshooting" for error outputs.
+   Expected: up to 3 messages, each a `[2026-08-16T07:05] username:` header line followed by the indented message body (forwarded messages appear quoted with `>`). See "Troubleshooting" for error outputs.
 
 6. **Reload Claude Code** so the skill registers: run `/reload-plugins` in an existing session, or start a new session. Confirm `discord` appears in the available-skills list.
 

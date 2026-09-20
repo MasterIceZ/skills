@@ -28,6 +28,10 @@ Read the last N messages (default 10, oldest first):
 ~/.claude/channels/discord/discordctl.sh read <channel-or-user-id> [limit]
 ```
 
+Each message prints a `[timestamp] author:` header followed by its indented body. Forwarded
+messages are unwrapped from their snapshot and quoted with `>`; attachments and embeds show as
+`<attachment: name — url>` and `<embed: title>`.
+
 ## Choosing send vs embed
 
 Use `embed` for structured or generated content: summaries, reports, digests, multi-line lists, anything with a natural title. Use plain `send` for short conversational messages such as greetings, quick replies, and one-liners.
@@ -39,4 +43,5 @@ Embed descriptions support Discord markdown (`**bold**`, `- lists`, newlines; pa
 - The script accepts either a channel ID or a user ID; for a user ID it opens a DM channel automatically.
 - Leave the bot token alone: the script sources it internally from the `.env` file, so there is no reason to print, echo, or pass it.
 - Reading uses REST message history, which needs the View Channel and Read Message History bot permissions. No gateway intents are involved, so Message Content Intent is not required.
+- A forwarded message arrives with empty `.content` and flag `16384` (`HAS_SNAPSHOT`) — the real text sits in `.message_snapshots[].message`. `read` unwraps that, so forwarded content is never silently blank.
 - `error: Missing Access` means the bot is not in that server or channel; fix the bot's invite or permissions in the Discord Developer Portal.
