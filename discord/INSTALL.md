@@ -6,6 +6,10 @@ Instructions for installing this skill on a new machine. Written to be executed 
 
 On-demand Discord send/read for Claude Code via one-shot REST calls. It deliberately replaces the `discord@claude-plugins-official` plugin, whose MCP server keeps a persistent Bun process with a live Discord gateway connection running (battery drain). This skill runs nothing in the background: each send/read is a single `curl` call that exits immediately.
 
+## Embed footer
+
+Embeds carry a `Sent by <provider> · <model>` footer. The script detects the provider by walking up its parent processes (`opencode` → OpenCode, `claude` → Claude Code), so it works unchanged under either harness; nothing to configure at install time. The calling agent passes its model name via `DISCORD_MODEL`. `DISCORD_PROVIDER` is only a fallback for harnesses the script doesn't recognise.
+
 ## Prerequisites
 
 | Requirement | Check | Notes |

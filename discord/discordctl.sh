@@ -6,6 +6,11 @@
 #   discordctl.sh send <channel-or-user-id> <message...>
 #   discordctl.sh embed <channel-or-user-id> <title> <description...>
 #   discordctl.sh read <channel-or-user-id> [limit]
+#
+# Embed footer shows "Sent by <provider> · <model>". The provider is detected from the agent
+# process that launched this script (so a model can't mislabel its harness); DISCORD_PROVIDER is
+# used only when detection fails. The model comes from DISCORD_MODEL, e.g.
+#   DISCORD_MODEL="Claude Opus 5.5" discordctl.sh embed ...
 set -euo pipefail
 
 ENV_FILE="$HOME/.claude/channels/discord/.env"
@@ -28,6 +33,19 @@ api() { # method path [json-body] — retries on Discord 429 rate limits
     sleep "$wait"
   done
   printf '%s' "$resp"
+}
+
+detect_provider() { # walk up the parent processes to find the agent harness
+  local pid=$PPID comm
+  while [ -n "$pid" ] && [ "$pid" -gt 1 ]; do
+    comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
+    case "${comm##*/}" in
+      opencode*) echo "OpenCode"; return ;;
+      claude*)   echo "Claude Code"; return ;;
+    esac
+    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+  done
+  [ -n "${CLAUDECODE:-}" ] && echo "Claude Code"
 }
 
 resolve_channel() { # accepts a channel ID, or a user ID (opens a DM)
@@ -71,8 +89,10 @@ case "$cmd" in
   embed)
     id=$1; title=$2; shift 2
     ch=$(resolve_channel "$id")
+    footer=$(jq -rn --arg p "$(detect_provider || true)" --arg o "${DISCORD_PROVIDER:-}" --arg m "${DISCORD_MODEL:-}" \
+      '[(if $p != "" then $p else $o end), $m] | map(select(. != "")) | "Sent by " + (if length == 0 then "an AI agent" else join(" · ") end)')
     api POST "/channels/$ch/messages" \
-      "$(jq -cn --arg t "$title" --arg d "$*" '{embeds:[{title:$t, description:$d, color:5793266, footer:{text:"Sent by Claude Code"}}]}')" \
+      "$(jq -cn --arg t "$title" --arg d "$*" --arg f "$footer" '{embeds:[{title:$t, description:$d, color:5793266, footer:{text:$f}}]}')" \
       | jq -r 'if .id then "sent embed [\(.id)] to channel \(.channel_id)" else "error: \(.message // .)" end'
     ;;
   read)

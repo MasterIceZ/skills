@@ -31,11 +31,18 @@ Send a plain message:
 ~/.claude/channels/discord/discordctl.sh send <channel-or-user-id> <message text>
 ```
 
-Send an embed (title + description card):
+Send an embed (title + description card), with a footer naming who sent it:
 
 ```bash
-~/.claude/channels/discord/discordctl.sh embed <channel-or-user-id> <title> <description text>
+DISCORD_MODEL="<your model's display name>" \
+  ~/.claude/channels/discord/discordctl.sh embed <channel-or-user-id> <title> <description text>
 ```
+
+The footer renders as `Sent by <provider> · <model>`, for example `Sent by OpenCode · Qwen 3.5` or `Sent by Claude Code · Claude Opus 5.5`.
+
+- **Provider**: the script detects it from the agent process that launched it (OpenCode, Claude Code). Do not set it yourself. This skill's path under `~/.claude` says nothing about which harness you are running in.
+- **Model**: set `DISCORD_MODEL` to the model you actually are, taken from your own system prompt or model ID. Do not copy a name from these examples. If you don't know it, leave `DISCORD_MODEL` unset and the footer shows the provider alone.
+- `DISCORD_PROVIDER` is only a fallback for harnesses the script can't detect.
 
 Read the last N messages (default 10, oldest first):
 
@@ -51,7 +58,7 @@ messages are unwrapped from their snapshot and quoted with `>`; attachments and 
 
 Use `embed` for structured or generated content: summaries, reports, digests, multi-line lists, anything with a natural title. Use plain `send` for short conversational messages such as greetings, quick replies, and one-liners.
 
-Embed descriptions support Discord markdown (`**bold**`, `- lists`, newlines; pass real newlines in the argument) and hold up to 4096 characters; keep the title at or under 256 characters. Every embed automatically carries a "Sent by Claude Code" footer, so leave that attribution out of the title and description.
+Embed descriptions support Discord markdown (`**bold**`, `- lists`, newlines; pass real newlines in the argument) and hold up to 4096 characters; keep the title at or under 256 characters. Every embed carries the `Sent by <provider> · <model>` footer, so leave that attribution out of the title and description.
 
 ## Notes
 
